@@ -259,6 +259,18 @@ export default function DemoPosPage() {
     await syncOrderEvent("create_order", order);
   }
 
+  async function syncPendingOrders() {
+    const pendingSyncOrders = orders.filter((order) => !order.syncedAt);
+    if (pendingSyncOrders.length === 0) {
+      setSyncStatus("Không có đơn nào cần đồng bộ lại.");
+      return;
+    }
+
+    for (const order of pendingSyncOrders) {
+      await syncOrder(order);
+    }
+  }
+
   function printInvoice(order: DemoOrder) {
     const win = window.open("", "_blank", "width=420,height=720");
     if (!win) {
@@ -538,6 +550,9 @@ export default function DemoPosPage() {
                 </label>
                 <Button type="button" variant="secondary" onClick={exportDeclarationCsv} disabled={orders.length === 0}>
                   Xuất dữ liệu kê khai
+                </Button>
+                <Button type="button" variant="secondary" onClick={syncPendingOrders} disabled={orders.every((order) => order.syncedAt)}>
+                  Đồng bộ lại đơn chưa gửi
                 </Button>
               </div>
             </div>
