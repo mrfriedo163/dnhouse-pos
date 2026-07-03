@@ -39,7 +39,7 @@ const DEFAULT_PASSWORD = "123456789";
 const DEFAULT_WEBHOOK_URL =
   process.env.NEXT_PUBLIC_POS_WEBHOOK_URL ||
   "https://script.google.com/macros/s/AKfycby_yqYsFTvyF9zrEDvX3UvmsOjjEzFAd7CSjpp2sxoMIIZGfzQtBEM69Xzl1Pu-oDKN/exec";
-const DEFAULT_WEBHOOK_SECRET = process.env.NEXT_PUBLIC_POS_WEBHOOK_SECRET || "";
+const DEFAULT_WEBHOOK_SECRET = process.env.NEXT_PUBLIC_POS_WEBHOOK_SECRET || "DNHOUSE_SECRET_123";
 const CUSTOM_SERVICE_NAME = "Dịch vụ khác";
 
 const localUsers: LocalUser[] = [
@@ -195,7 +195,7 @@ export default function DemoPosPage() {
     setLoginPassword("");
   }
 
-  async function syncOrderEvent(action: "create_order" | "complete_order" | "delete_order", order: DemoOrder) {
+  async function syncOrderEvent(action: "create_order" | "complete_order", order: DemoOrder) {
     if (!webhookUrl.trim()) return;
     setSyncStatus("Đang gửi data online...");
     const payload = {
@@ -416,9 +416,8 @@ export default function DemoPosPage() {
   }
 
   function deleteOrder(id: string) {
-    const order = orders.find((item) => item.id === id);
     setOrders((current) => current.filter((order) => order.id !== id));
-    if (order) void syncOrderEvent("delete_order", order);
+    setSyncStatus("Đã xóa đơn trên app. Google Sheet hiện chưa bật xóa đơn online.");
   }
 
   if (!authLoaded) {
