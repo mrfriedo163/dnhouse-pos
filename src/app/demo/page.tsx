@@ -140,7 +140,7 @@ export default function DemoPosPage() {
     if (settingsRaw) {
       const settings = JSON.parse(settingsRaw) as { webhookUrl?: string; webhookSecret?: string; autoPrint?: boolean };
       setWebhookUrl(settings.webhookUrl?.trim() || DEFAULT_WEBHOOK_URL);
-      setWebhookSecret(settings.webhookSecret ?? DEFAULT_WEBHOOK_SECRET);
+      setWebhookSecret(settings.webhookSecret?.trim() || DEFAULT_WEBHOOK_SECRET);
       setAutoPrint(settings.autoPrint ?? true);
     }
   }, []);
@@ -152,6 +152,12 @@ export default function DemoPosPage() {
   useEffect(() => {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ webhookUrl, webhookSecret, autoPrint }));
   }, [webhookUrl, webhookSecret, autoPrint]);
+
+  useEffect(() => {
+    if (!webhookSecret.trim()) {
+      setWebhookSecret(DEFAULT_WEBHOOK_SECRET);
+    }
+  }, [webhookSecret]);
 
   const selectedService = services.find((service) => service.name === serviceName) ?? services[0];
   const isCustomService = selectedService.name === CUSTOM_SERVICE_NAME;
