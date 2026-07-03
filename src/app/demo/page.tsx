@@ -39,6 +39,7 @@ const DEFAULT_PASSWORD = "123456789";
 const DEFAULT_WEBHOOK_URL =
   process.env.NEXT_PUBLIC_POS_WEBHOOK_URL ||
   "https://script.google.com/macros/s/AKfycby_yqYsFTvyF9zrEDvX3UvmsOjjEzFAd7CSjpp2sxoMIIZGfzQtBEM69Xzl1Pu-oDKN/exec";
+const DEFAULT_WEBHOOK_SECRET = process.env.NEXT_PUBLIC_POS_WEBHOOK_SECRET || "";
 const CUSTOM_SERVICE_NAME = "Dịch vụ khác";
 
 const localUsers: LocalUser[] = [
@@ -121,6 +122,7 @@ export default function DemoPosPage() {
   const [discountPercent, setDiscountPercent] = useState(0);
   const [note, setNote] = useState("");
   const [webhookUrl, setWebhookUrl] = useState(DEFAULT_WEBHOOK_URL);
+  const [webhookSecret, setWebhookSecret] = useState(DEFAULT_WEBHOOK_SECRET);
   const [autoPrint, setAutoPrint] = useState(true);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
 
@@ -136,8 +138,9 @@ export default function DemoPosPage() {
     if (raw) setOrders(JSON.parse(raw));
     const settingsRaw = window.localStorage.getItem(SETTINGS_KEY);
     if (settingsRaw) {
-      const settings = JSON.parse(settingsRaw) as { webhookUrl?: string; autoPrint?: boolean };
+      const settings = JSON.parse(settingsRaw) as { webhookUrl?: string; webhookSecret?: string; autoPrint?: boolean };
       setWebhookUrl(settings.webhookUrl?.trim() || DEFAULT_WEBHOOK_URL);
+      setWebhookSecret(settings.webhookSecret ?? DEFAULT_WEBHOOK_SECRET);
       setAutoPrint(settings.autoPrint ?? true);
     }
   }, []);
@@ -147,8 +150,8 @@ export default function DemoPosPage() {
   }, [orders]);
 
   useEffect(() => {
-    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ webhookUrl, autoPrint }));
-  }, [webhookUrl, autoPrint]);
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ webhookUrl, webhookSecret, autoPrint }));
+  }, [webhookUrl, webhookSecret, autoPrint]);
 
   const selectedService = services.find((service) => service.name === serviceName) ?? services[0];
   const isCustomService = selectedService.name === CUSTOM_SERVICE_NAME;
@@ -195,28 +198,54 @@ export default function DemoPosPage() {
   async function syncOrderEvent(action: "create_order" | "complete_order" | "delete_order", order: DemoOrder) {
     if (!webhookUrl.trim()) return;
     setSyncStatus("Đang gửi data online...");
+    const payload = {
+      source: "DN House POS",
+      action,
+      token: webhookSecret.trim(),
+      secret: webhookSecret.trim(),
+      api_key: webhookSecret.trim(),
+      synced_at: new Date().toISOString(),
+      actor_id: currentUser?.id ?? "",
+      actor_name: currentUser?.name ?? "",
+      actor_role: currentUser?.role ?? "",
+      created_at: order.createdAt,
+      order_no: order.orderNo,
+      customer_name: order.customerName,
+      customer_phone: order.customerPhone,
+      service_name: order.service,
+      quantity: order.quantity,
+      unit_price: order.unitPrice,
+      subtotal: orderSubtotal(order),
+      discount_value: order.discount,
+      discount_mode: order.discountMode ?? "cash",
+      discount_input: order.discountValue ?? order.discount,
+      final_total: orderTotal(order),
+      "\\": order.note,
+      note: order.note,
+      is_completed: Boolean(order.completedAt),
+      completed_at: order.completedAt ?? "",
+      order: {
+        ...order,
+        subtotal: orderSubtotal(order),
+        total: orderTotal(order),
+      },
+    };
+
     try {
-      await fetch(webhookUrl.trim(), {
+      const response = await fetch(webhookUrl.trim(), {
         method: "POST",
-        mode: "no-cors",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          source: "DN House POS",
-          action,
-          actor: currentUser ? { id: currentUser.id, name: currentUser.name, role: currentUser.role } : null,
-          syncedAt: new Date().toISOString(),
-          order: {
-            ...order,
-            subtotal: orderSubtotal(order),
-            total: orderTotal(order),
-          },
-        }),
+        headers: { "content-type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload),
       });
+      const text = await response.text();
+      if (!response.ok || text.includes('"ok":false')) {
+        throw new Error(text || "Webhook rejected");
+      }
       const syncedAt = new Date().toISOString();
       setOrders((current) => current.map((item) => item.id === order.id ? { ...item, syncedAt } : item));
       setSyncStatus("Đã gửi data online.");
     } catch (error) {
-      setSyncStatus("Chưa gửi được data online. Kiểm tra lại link webhook.");
+      setSyncStatus("Chưa gửi được data online. Kiểm tra webhook hoặc mã kết nối.");
     }
   }
 
@@ -490,6 +519,10 @@ export default function DemoPosPage() {
                 <div className="mt-3">
                   <Label>Webhook URL</Label>
                   <Input value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} placeholder="https://script.google.com/macros/s/.../exec" />
+                </div>
+                <div className="mt-3">
+                  <Label>Mã kết nối</Label>
+                  <Input value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value)} placeholder="Để trống nếu Apps Script không yêu cầu" />
                 </div>
                 {syncStatus && <div className="mt-2 text-sm font-bold text-emerald-700">{syncStatus}</div>}
               </div>
