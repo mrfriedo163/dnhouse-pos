@@ -36,6 +36,9 @@ const STORAGE_KEY = "dn-house-pos-demo-orders";
 const SETTINGS_KEY = "dn-house-pos-demo-settings";
 const AUTH_KEY = "dn-house-pos-demo-auth";
 const DEFAULT_PASSWORD = "123456789";
+const DEFAULT_WEBHOOK_URL =
+  process.env.NEXT_PUBLIC_POS_WEBHOOK_URL ||
+  "https://script.google.com/macros/s/AKfycby_yqYsFTvyF9zrEDvX3UvmsOjjEzFAd7CSjpp2sxoMIIZGfzQtBEM69Xzl1Pu-oDKN/exec";
 const CUSTOM_SERVICE_NAME = "Dịch vụ khác";
 
 const localUsers: LocalUser[] = [
@@ -117,7 +120,7 @@ export default function DemoPosPage() {
   const [discountCash, setDiscountCash] = useState(0);
   const [discountPercent, setDiscountPercent] = useState(0);
   const [note, setNote] = useState("");
-  const [webhookUrl, setWebhookUrl] = useState("");
+  const [webhookUrl, setWebhookUrl] = useState(DEFAULT_WEBHOOK_URL);
   const [autoPrint, setAutoPrint] = useState(true);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
 
@@ -134,7 +137,7 @@ export default function DemoPosPage() {
     const settingsRaw = window.localStorage.getItem(SETTINGS_KEY);
     if (settingsRaw) {
       const settings = JSON.parse(settingsRaw) as { webhookUrl?: string; autoPrint?: boolean };
-      setWebhookUrl(settings.webhookUrl ?? "");
+      setWebhookUrl(settings.webhookUrl?.trim() || DEFAULT_WEBHOOK_URL);
       setAutoPrint(settings.autoPrint ?? true);
     }
   }, []);
@@ -189,9 +192,9 @@ export default function DemoPosPage() {
     setLoginPassword("");
   }
 
-  async function syncOrder(order: DemoOrder) {
+  async function syncOrderEvent(action: "create_order" | "complete_order" | "delete_order", order: DemoOrder) {
     if (!webhookUrl.trim()) return;
-    setSyncStatus("Đang gửi đơn lên data online...");
+    setSyncStatus("Đang gửi data online...");
     try {
       await fetch(webhookUrl.trim(), {
         method: "POST",
@@ -199,7 +202,9 @@ export default function DemoPosPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           source: "DN House POS",
-          action: "create_order",
+          action,
+          actor: currentUser ? { id: currentUser.id, name: currentUser.name, role: currentUser.role } : null,
+          syncedAt: new Date().toISOString(),
           order: {
             ...order,
             subtotal: orderSubtotal(order),
@@ -209,10 +214,14 @@ export default function DemoPosPage() {
       });
       const syncedAt = new Date().toISOString();
       setOrders((current) => current.map((item) => item.id === order.id ? { ...item, syncedAt } : item));
-      setSyncStatus("Đã gửi data online. Nếu dùng Google Apps Script, kiểm tra Sheet để xác nhận.");
+      setSyncStatus("Đã gửi data online.");
     } catch (error) {
       setSyncStatus("Chưa gửi được data online. Kiểm tra lại link webhook.");
     }
+  }
+
+  async function syncOrder(order: DemoOrder) {
+    await syncOrderEvent("create_order", order);
   }
 
   function printInvoice(order: DemoOrder) {
@@ -369,13 +378,18 @@ export default function DemoPosPage() {
   }
 
   function completeOrder(id: string) {
+    const completedAt = new Date().toISOString();
+    const order = orders.find((item) => item.id === id);
     setOrders((current) =>
-      current.map((order) => order.id === id ? { ...order, completedAt: new Date().toISOString() } : order),
+      current.map((order) => order.id === id ? { ...order, completedAt } : order),
     );
+    if (order) void syncOrderEvent("complete_order", { ...order, completedAt });
   }
 
   function deleteOrder(id: string) {
+    const order = orders.find((item) => item.id === id);
     setOrders((current) => current.filter((order) => order.id !== id));
+    if (order) void syncOrderEvent("delete_order", order);
   }
 
   if (!authLoaded) {
@@ -414,7 +428,7 @@ export default function DemoPosPage() {
             <Button type="submit" className="w-full">Đăng nhập</Button>
           </form>
           <div className="mt-4 rounded-lg bg-skySoft p-3 text-xs font-semibold text-slate-600">
-            Tài khoản test: <b>admin</b> hoặc <b>staff</b>. Mật khẩu: <b>123456789</b>.
+            Tài khoản nội bộ: <b>admin</b> hoặc <b>staff</b>. Mật khẩu mặc định: <b>123456789</b>.
           </div>
         </Card>
       </main>
@@ -433,9 +447,6 @@ export default function DemoPosPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <a href="/login" className="hidden rounded-lg border border-sky-100 px-3 py-2 text-xs font-bold text-slate-600 shadow-soft sm:block">
-              Bản Supabase
-            </a>
             <button type="button" onClick={logout} className="rounded-lg border border-sky-100 px-3 py-2 text-xs font-bold text-slate-600 shadow-soft">
               Đăng xuất
             </button>
