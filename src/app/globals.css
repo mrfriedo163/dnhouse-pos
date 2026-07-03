@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+
+body {
+  @apply bg-page text-navy antialiased;
+  margin: 0;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 42%, #eef7ff 100%);
+  font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+a { @apply text-inherit no-underline; }
+
+.app-shell {
+  @apply mx-auto max-w-7xl px-4;
+}
+
+@media print {
+  .no-print { display: none !important; }
+}
