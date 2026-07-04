@@ -4,7 +4,7 @@ import { updateSession } from "@/lib/supabase/middleware";
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  if (path === "/" || path.startsWith("/demo") || path.startsWith("/api/pos-sync")) {
+  if (path.startsWith("/demo") || path.startsWith("/api/pos-sync")) {
     return NextResponse.next();
   }
 
