@@ -117,55 +117,57 @@ export async function buildDefaultBillPdf(data: BillData): Promise<Uint8Array> {
   const line = rgb(0.06, 0.13, 0.32);
   const values = buildBillValues(data);
 
-  page.drawRectangle({ x: 2, y: 2, width: 194.4, height: 137.7, borderColor: navy, borderWidth: 1.2, color: rgb(1, 1, 1) });
+  // Cheap thermal printers often clip the printable edge. Keep the frame well
+  // inside the 70x50mm page so the border survives small feed/cut offsets.
+  page.drawRectangle({ x: 14, y: 10, width: 170.4, height: 121.7, borderColor: navy, borderWidth: 1, color: rgb(1, 1, 1) });
 
   try {
     const logoPath = path.join(process.cwd(), "public", "dn-house-logo.jpg");
     const logoBytes = await readFile(logoPath);
     const logo = await doc.embedJpg(logoBytes);
-    page.drawImage(logo, { x: 8, y: 105, width: 26, height: 26 });
+    page.drawImage(logo, { x: 19, y: 108, width: 20, height: 20 });
   } catch {
-    page.drawRectangle({ x: 8, y: 105, width: 26, height: 26, borderColor: navy, borderWidth: 0.8 });
+    page.drawRectangle({ x: 19, y: 108, width: 20, height: 20, borderColor: navy, borderWidth: 0.8 });
   }
 
-  page.drawText("GIAT SAY", { x: 40, y: 123, size: 8.5, font: bold, color: navy });
-  page.drawText("DN House", { x: 40, y: 107, size: 18, font: bold, color: navy });
-  page.drawText("PHIEU HEN / BILL", { x: 125, y: 123, size: 6.8, font: bold, color: navy });
-  page.drawText(ascii(values.order_no), { x: 126, y: 111, size: 7.8, font: bold, color: navy });
-  page.drawLine({ start: { x: 8, y: 99 }, end: { x: 190, y: 99 }, thickness: 0.7, color: line });
+  page.drawText("GIAT SAY", { x: 43, y: 123, size: 7.5, font: bold, color: navy });
+  page.drawText("DN House", { x: 43, y: 108, size: 15.5, font: bold, color: navy });
+  page.drawText("PHIEU HEN / BILL", { x: 125, y: 123, size: 6, font: bold, color: navy });
+  page.drawText(ascii(values.order_no), { x: 124, y: 113, size: 6.5, font: bold, color: navy });
+  page.drawLine({ start: { x: 18, y: 101 }, end: { x: 180, y: 101 }, thickness: 0.7, color: line });
 
-  page.drawText("Khach:", { x: 9, y: 88, size: 8, font: bold, color: navy });
-  drawWrappedText(page, values.customer_name || "-", 40, 88, { size: 8, font: bold, maxWidth: 82, lineHeight: 8, color: navy });
-  page.drawText("SDT:", { x: 126, y: 88, size: 8, font: bold, color: navy });
-  page.drawText(ascii(values.customer_phone || "-"), { x: 148, y: 88, size: 8, font: bold, color: navy });
+  page.drawText("Khach:", { x: 18, y: 91, size: 7.4, font: bold, color: navy });
+  drawWrappedText(page, values.customer_name || "-", 48, 91, { size: 7.4, font: bold, maxWidth: 60, lineHeight: 7.4, color: navy });
+  page.drawText("SDT:", { x: 116, y: 91, size: 7.4, font: bold, color: navy });
+  page.drawText(ascii(values.customer_phone || "-"), { x: 139, y: 91, size: 7.4, font: bold, color: navy });
 
   const services = data.items.map((it) => {
     const qty = Number(it.quantity);
     const qtyText = Number.isInteger(qty) ? String(qty) : String(qty).replace(".", ",");
     return `${shortServiceName(ascii(it.service_name_snapshot))} ${qtyText}${ascii(it.unit_type ?? "")}`;
   });
-  page.drawText("DV:", { x: 9, y: 73, size: 8, font: bold, color: navy });
-  drawWrappedText(page, services.join(" / ") || "-", 28, 73, { size: 7.2, font: bold, maxWidth: 162, lineHeight: 8, color: navy });
+  page.drawText("DV:", { x: 18, y: 77, size: 7.4, font: bold, color: navy });
+  drawWrappedText(page, services.join(" / ") || "-", 36, 77, { size: 7, font: bold, maxWidth: 142, lineHeight: 7.5, color: navy });
 
-  page.drawText("Gia:", { x: 9, y: 57, size: 8, font: bold, color: navy });
-  page.drawText(ascii(values.subtotal), { x: 32, y: 57, size: 8, font: bold, color: navy });
-  page.drawText("Giam:", { x: 88, y: 57, size: 7.4, font, color: muted });
-  page.drawText(ascii(values.discount_total), { x: 116, y: 57, size: 7.4, font, color: muted });
+  page.drawText("Gia:", { x: 18, y: 61, size: 7.4, font: bold, color: navy });
+  page.drawText(ascii(values.subtotal), { x: 42, y: 61, size: 7.4, font: bold, color: navy });
+  page.drawText("Giam:", { x: 96, y: 61, size: 6.8, font, color: muted });
+  page.drawText(ascii(values.discount_total), { x: 124, y: 61, size: 6.8, font, color: muted });
 
-  page.drawText("TT:", { x: 9, y: 42, size: 8, font: bold, color: navy });
-  page.drawText(ascii(values.final_total), { x: 31, y: 40, size: 12, font: bold, color: navy });
-  page.drawText("Trang thai:", { x: 102, y: 43, size: 7, font, color: muted });
-  page.drawText("Chua tra", { x: 145, y: 43, size: 7.5, font: bold, color: navy });
+  page.drawText("TT:", { x: 18, y: 46, size: 7.4, font: bold, color: navy });
+  page.drawText(ascii(values.final_total), { x: 42, y: 44, size: 11, font: bold, color: navy });
+  page.drawText("Trang thai:", { x: 105, y: 47, size: 6.4, font, color: muted });
+  page.drawText("Chua tra", { x: 146, y: 47, size: 7, font: bold, color: navy });
 
-  page.drawText("Nhan:", { x: 9, y: 27, size: 7, font: bold, color: navy });
-  page.drawText(ascii(values.received_at), { x: 35, y: 27, size: 6.5, font, color: muted });
-  page.drawText("Hen:", { x: 111, y: 27, size: 7, font: bold, color: navy });
-  page.drawText(ascii(values.due_at || "-"), { x: 132, y: 27, size: 6.5, font, color: muted });
+  page.drawText("Nhan:", { x: 18, y: 31, size: 6.4, font: bold, color: navy });
+  page.drawText(ascii(values.received_at), { x: 43, y: 31, size: 5.8, font, color: muted });
+  page.drawText("Hen:", { x: 111, y: 31, size: 6.4, font: bold, color: navy });
+  page.drawText(ascii(values.due_at || "-"), { x: 132, y: 31, size: 5.8, font, color: muted });
 
   if (values.note) {
-    drawWrappedText(page, `GC: ${values.note}`, 9, 16, { size: 6, font, maxWidth: 180, lineHeight: 6.5, color: muted });
+    drawWrappedText(page, `GC: ${values.note}`, 18, 22, { size: 5.6, font, maxWidth: 160, lineHeight: 6, color: muted });
   }
-  page.drawText("Zalo: 0945.632.853 - 0917.115.374", { x: 38, y: 6, size: 6.6, font: bold, color: navy });
+  page.drawText("Zalo: 0945.632.853", { x: 68, y: 14, size: 6.3, font: bold, color: navy });
 
   return doc.save();
 }
