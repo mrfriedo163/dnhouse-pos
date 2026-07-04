@@ -207,6 +207,7 @@ export default function DemoPosPage() {
     const payload = {
       source: "DN House POS",
       action,
+      webhookUrl: webhookUrl.trim(),
       token: webhookSecret.trim(),
       secret: webhookSecret.trim(),
       api_key: webhookSecret.trim(),
@@ -238,9 +239,9 @@ export default function DemoPosPage() {
     };
 
     try {
-      const response = await fetch(webhookUrl.trim(), {
+      const response = await fetch("/api/pos-sync", {
         method: "POST",
-        headers: { "content-type": "text/plain;charset=utf-8" },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
       const text = await response.text();
