@@ -14,7 +14,13 @@ const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.s
 /** Build the declaration field rows for a date range. */
 async function buildRows(startIso: string, endIso: string) {
   const admin = createAdminClient();
-  const { data } = await admin.from("orders").select("*").gte("received_at", startIso).lte("received_at", endIso).order("received_at");
+  const { data } = await admin
+    .from("orders")
+    .select("*")
+    .is("deleted_at", null)
+    .gte("received_at", startIso)
+    .lte("received_at", endIso)
+    .order("received_at");
   const orders = (data ?? []) as Order[];
 
   // services_summary per order
