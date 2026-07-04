@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label, Select } from "@/components/ui/input";
@@ -30,11 +30,31 @@ type DemoOrder = {
   createdAt: string;
   completedAt: string | null;
   syncedAt?: string | null;
+  isDemo?: boolean;
+};
+
+type RemoteOrder = {
+  created_at?: string;
+  order_no?: string;
+  customer_name?: string;
+  customer_phone?: string;
+  service_name?: string;
+  quantity?: number;
+  unit_price?: number;
+  discount_value?: number;
+  note?: string;
+  is_completed?: boolean;
+  completed_at?: string;
+  status?: string;
+  data_mode?: string;
+  target_sheet?: string;
 };
 
 const STORAGE_KEY = "dn-house-pos-demo-orders";
 const SETTINGS_KEY = "dn-house-pos-demo-settings";
 const AUTH_KEY = "dn-house-pos-demo-auth";
+const REALTIME_CHANNEL = "dn-house-pos-realtime";
+const REALTIME_REFRESH_MS = 10_000;
 const DEFAULT_PASSWORD = "123456789";
 const DEFAULT_WEBHOOK_URL =
   process.env.NEXT_PUBLIC_POS_WEBHOOK_URL ||
@@ -71,10 +91,14 @@ function todayKey(date = new Date()) {
   return date.toISOString().slice(0, 10);
 }
 
-function makeOrderNo(count: number) {
+function makeOrderNo(count: number, isDemo = false) {
   const date = new Date();
   const ymd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
-  return `DN-${ymd}-${String(count + 1).padStart(4, "0")}`;
+  return `${isDemo ? "DEMO" : "DN"}-${ymd}-${String(count + 1).padStart(4, "0")}`;
+}
+
+function monthSheetName(date = new Date(), isDemo = false) {
+  return `${isDemo ? "DEMO" : "DATA"}_T${String(date.getMonth() + 1).padStart(2, "0")}_${date.getFullYear()}`;
 }
 
 function clampNumber(value: number, min = 0, max = Number.POSITIVE_INFINITY) {
@@ -104,7 +128,53 @@ function escapeHtml(value: unknown) {
     .replace(/'/g, "&#039;");
 }
 
+function remoteOrderToLocal(order: RemoteOrder): DemoOrder | null {
+  if (!order.order_no) return null;
+  return {
+    id: `sheet-${order.order_no}`,
+    orderNo: order.order_no,
+    customerName: order.customer_name || "Khách lẻ",
+    customerPhone: order.customer_phone || "",
+    service: order.service_name || "Dịch vụ",
+    quantity: Number(order.quantity || 0),
+    unitPrice: Number(order.unit_price || 0),
+    discount: Number(order.discount_value || 0),
+    note: order.note || "",
+    createdAt: order.created_at || new Date().toISOString(),
+    completedAt: order.completed_at || null,
+    syncedAt: new Date().toISOString(),
+    isDemo: order.data_mode === "Demo" || order.data_mode === "demo" || order.target_sheet?.startsWith("DEMO_"),
+  };
+}
+
+function mergeRemoteOrders(current: DemoOrder[], remoteOrders: RemoteOrder[]) {
+  const deletedOrderNos = new Set(
+    remoteOrders
+      .filter((order) => order.status === "Đã xóa" && order.order_no)
+      .map((order) => String(order.order_no)),
+  );
+  const byOrderNo = new Map<string, DemoOrder>();
+
+  for (const order of current) {
+    if (!deletedOrderNos.has(order.orderNo)) byOrderNo.set(order.orderNo, order);
+  }
+
+  for (const remote of remoteOrders) {
+    if (remote.status === "Đã xóa") continue;
+    const local = remoteOrderToLocal(remote);
+    if (!local) continue;
+    const existing = byOrderNo.get(local.orderNo);
+    byOrderNo.set(local.orderNo, existing ? { ...existing, ...local, id: existing.id } : local);
+  }
+
+  return Array.from(byOrderNo.values()).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+}
+
 export default function DemoPosPage() {
+  const realtimeChannelRef = useRef<BroadcastChannel | null>(null);
+  const skipBroadcastRef = useRef(false);
   const [authLoaded, setAuthLoaded] = useState(false);
   const [currentUser, setCurrentUser] = useState<LocalUser | null>(null);
   const [loginId, setLoginId] = useState("admin");
@@ -124,7 +194,9 @@ export default function DemoPosPage() {
   const [webhookUrl, setWebhookUrl] = useState(DEFAULT_WEBHOOK_URL);
   const [webhookSecret, setWebhookSecret] = useState(DEFAULT_WEBHOOK_SECRET);
   const [autoPrint, setAutoPrint] = useState(true);
+  const [demoMode, setDemoMode] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [lastRealtimeAt, setLastRealtimeAt] = useState<string | null>(null);
 
   useEffect(() => {
     const authRaw = window.localStorage.getItem(AUTH_KEY);
@@ -138,26 +210,110 @@ export default function DemoPosPage() {
     if (raw) setOrders(JSON.parse(raw));
     const settingsRaw = window.localStorage.getItem(SETTINGS_KEY);
     if (settingsRaw) {
-      const settings = JSON.parse(settingsRaw) as { webhookUrl?: string; webhookSecret?: string; autoPrint?: boolean };
+      const settings = JSON.parse(settingsRaw) as { webhookUrl?: string; webhookSecret?: string; autoPrint?: boolean; demoMode?: boolean };
       setWebhookUrl(settings.webhookUrl?.trim() || DEFAULT_WEBHOOK_URL);
       setWebhookSecret(settings.webhookSecret?.trim() || DEFAULT_WEBHOOK_SECRET);
       setAutoPrint(settings.autoPrint ?? true);
+      setDemoMode(settings.demoMode ?? false);
     }
   }, []);
 
   useEffect(() => {
+    const channel = "BroadcastChannel" in window ? new BroadcastChannel(REALTIME_CHANNEL) : null;
+    realtimeChannelRef.current = channel;
+
+    function applyIncomingOrders(nextOrders: DemoOrder[]) {
+      skipBroadcastRef.current = true;
+      setOrders(nextOrders);
+      setLastRealtimeAt(new Date().toLocaleTimeString("vi-VN"));
+    }
+
+    channel?.addEventListener("message", (event: MessageEvent<{ type?: string; orders?: DemoOrder[] }>) => {
+      if (event.data?.type === "orders_replace" && Array.isArray(event.data.orders)) {
+        applyIncomingOrders(event.data.orders);
+      }
+    });
+
+    function handleStorage(event: StorageEvent) {
+      if (event.key !== STORAGE_KEY || !event.newValue) return;
+      try {
+        applyIncomingOrders(JSON.parse(event.newValue) as DemoOrder[]);
+      } catch {
+        // Ignore malformed localStorage writes from old app versions.
+      }
+    }
+
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      channel?.close();
+      realtimeChannelRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+    if (skipBroadcastRef.current) {
+      skipBroadcastRef.current = false;
+      return;
+    }
+    realtimeChannelRef.current?.postMessage({ type: "orders_replace", orders });
   }, [orders]);
 
   useEffect(() => {
-    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ webhookUrl, webhookSecret, autoPrint }));
-  }, [webhookUrl, webhookSecret, autoPrint]);
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ webhookUrl, webhookSecret, autoPrint, demoMode }));
+  }, [webhookUrl, webhookSecret, autoPrint, demoMode]);
 
   useEffect(() => {
     if (!webhookSecret.trim()) {
       setWebhookSecret(DEFAULT_WEBHOOK_SECRET);
     }
   }, [webhookSecret]);
+
+  useEffect(() => {
+    if (currentUser?.role !== "admin" && demoMode) {
+      setDemoMode(false);
+    }
+  }, [currentUser?.role, demoMode]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let disposed = false;
+    const activeUser = currentUser;
+    async function refreshFromSheet(silent = true) {
+      try {
+        if (!silent) setSyncStatus("Đang cập nhật dữ liệu mới từ Sheet...");
+        const response = await fetch("/api/pos-sync", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "list_orders",
+            include_demo: activeUser.role === "admin",
+            month: new Date().toISOString(),
+            actor_id: activeUser.id,
+            actor_role: activeUser.role,
+          }),
+        });
+        const json = await response.json();
+        const remoteOrders = (json?.data?.orders ?? json?.orders ?? []) as RemoteOrder[];
+        if (!response.ok || json?.ok === false || !Array.isArray(remoteOrders) || disposed) return;
+        skipBroadcastRef.current = true;
+        setOrders((current) => mergeRemoteOrders(current, remoteOrders));
+        setLastRealtimeAt(new Date().toLocaleTimeString("vi-VN"));
+        if (!silent) setSyncStatus("Đã cập nhật dữ liệu mới từ Sheet.");
+      } catch {
+        if (!silent) setSyncStatus("Chưa cập nhật được dữ liệu từ Sheet.");
+      }
+    }
+
+    void refreshFromSheet(true);
+    const intervalId = window.setInterval(() => void refreshFromSheet(true), REALTIME_REFRESH_MS);
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [currentUser]);
 
   const selectedService = services.find((service) => service.name === serviceName) ?? services[0];
   const isCustomService = selectedService.name === CUSTOM_SERVICE_NAME;
@@ -172,15 +328,20 @@ export default function DemoPosPage() {
   const previewTotal = Math.max(0, subtotal - computedDiscount);
 
   const todayOrders = useMemo(
-    () => orders.filter((order) => todayKey(new Date(order.createdAt)) === todayKey()),
+    () => orders.filter((order) => !order.isDemo && todayKey(new Date(order.createdAt)) === todayKey()),
     [orders],
   );
-  const pendingOrders = orders.filter((order) => !order.completedAt);
+  const isAdmin = currentUser?.role === "admin";
+  const visibleOrders = useMemo(
+    () => isAdmin ? orders : orders.filter((order) => !order.isDemo),
+    [isAdmin, orders],
+  );
+  const pendingOrders = visibleOrders.filter((order) => !order.completedAt);
   const todayRevenue = todayOrders.reduce(
     (sum, order) => sum + orderTotal(order),
     0,
   );
-  const isAdmin = currentUser?.role === "admin";
+  const activeSheetName = monthSheetName(new Date(), isAdmin && demoMode);
 
   function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -213,6 +374,9 @@ export default function DemoPosPage() {
       actor_id: currentUser?.id ?? "",
       actor_name: currentUser?.name ?? "",
       actor_role: currentUser?.role ?? "",
+      is_demo: Boolean(order.isDemo),
+      data_mode: order.isDemo ? "demo" : "real",
+      target_sheet: monthSheetName(new Date(order.createdAt), Boolean(order.isDemo)),
       created_at: order.createdAt,
       order_no: order.orderNo,
       customer_name: order.customerName,
@@ -372,7 +536,7 @@ export default function DemoPosPage() {
       "Trạng thái",
       "Ghi chú",
     ];
-    const rows = orders.map((order) => [
+    const rows = orders.filter((order) => !order.isDemo).map((order) => [
       order.orderNo,
       new Date(order.createdAt).toLocaleString("vi-VN"),
       order.customerName,
@@ -398,9 +562,10 @@ export default function DemoPosPage() {
 
   function createOrder(e: React.FormEvent) {
     e.preventDefault();
+    const isDemoOrder = isAdmin && demoMode;
     const order: DemoOrder = {
       id: crypto.randomUUID(),
-      orderNo: makeOrderNo(orders.length),
+      orderNo: makeOrderNo(orders.length, isDemoOrder),
       customerName: customerName.trim() || "Khách lẻ",
       customerPhone: customerPhone.trim(),
       service: activeServiceName,
@@ -413,6 +578,7 @@ export default function DemoPosPage() {
       createdAt: new Date().toISOString(),
       completedAt: null,
       syncedAt: null,
+      isDemo: isDemoOrder,
     };
     setOrders([order, ...orders]);
     void syncOrder(order);
@@ -508,6 +674,9 @@ export default function DemoPosPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <div className="hidden rounded-lg bg-skySoft px-3 py-2 text-xs font-bold text-slate-600 md:block">
+              Realtime: {lastRealtimeAt ? `cập nhật ${lastRealtimeAt}` : "đang chờ"}
+            </div>
             <button type="button" onClick={logout} className="rounded-lg border border-sky-100 px-3 py-2 text-xs font-bold text-slate-600 shadow-soft">
               Đăng xuất
             </button>
@@ -521,7 +690,9 @@ export default function DemoPosPage() {
           <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h1 className="text-2xl font-black text-navy md:text-3xl">Quản lý đơn giặt sấy DN House</h1>
-              <p className="mt-2 text-sm font-semibold text-slate-500">Tạo đơn, theo dõi đơn đang xử lý và đánh dấu trả đồ ngay trên máy này.</p>
+              <p className="mt-2 text-sm font-semibold text-slate-500">
+                Tạo đơn, theo dõi đơn đang xử lý và đánh dấu trả đồ. Data hiện ghi vào tab <b>{activeSheetName}</b>.
+              </p>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="rounded-xl bg-skySoft px-4 py-3">
@@ -546,7 +717,7 @@ export default function DemoPosPage() {
               <div>
                 <CardTitle>Kết nối data online</CardTitle>
                 <p className="mt-2 text-sm font-semibold text-slate-500">
-                  Dán Google Apps Script webhook hoặc endpoint riêng. Khi tạo đơn, POS sẽ tự gửi data đơn hàng lên đó.
+                  POS tự gửi đơn lên Google Sheet và tự cập nhật dữ liệu mới mỗi 10 giây khi nhiều máy cùng dùng.
                 </p>
                 <div className="mt-3">
                   <Label>Webhook URL</Label>
@@ -563,6 +734,10 @@ export default function DemoPosPage() {
                   <input type="checkbox" checked={autoPrint} onChange={(e) => setAutoPrint(e.target.checked)} />
                   Tự in hóa đơn
                 </label>
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-orange-100 bg-orange-50 px-3 py-2 text-sm font-bold text-orange-800 shadow-soft">
+                  <input type="checkbox" checked={demoMode} onChange={(e) => setDemoMode(e.target.checked)} />
+                  Chế độ demo
+                </label>
                 <Button type="button" variant="secondary" onClick={exportDeclarationCsv} disabled={orders.length === 0}>
                   Xuất dữ liệu kê khai
                 </Button>
@@ -570,6 +745,9 @@ export default function DemoPosPage() {
                   Đồng bộ lại đơn chưa gửi
                 </Button>
               </div>
+            </div>
+            <div className="mt-3 rounded-lg border border-sky-100 bg-skySoft px-3 py-2 text-xs font-bold text-slate-600">
+              Quy ước data: đơn thật vào tab <b>{monthSheetName()}</b>. Admin bật demo thì đơn test vào tab <b>{monthSheetName(new Date(), true)}</b> và không tính kê khai.
             </div>
           </Card>
         )}
@@ -694,12 +872,12 @@ export default function DemoPosPage() {
               <span className="rounded-full bg-skySoft px-3 py-1 text-xs font-black text-navy">{pendingOrders.length} đơn</span>
             </div>
             <div className="mt-4 space-y-3">
-              {orders.length === 0 && (
+              {visibleOrders.length === 0 && (
                 <div className="rounded-xl border border-dashed border-sky-200 p-6 text-center text-sm font-semibold text-slate-500">
                   Chưa có đơn nào. Tạo thử một đơn ở cột bên trái.
                 </div>
               )}
-              {orders.map((order) => {
+              {visibleOrders.map((order) => {
                 const total = orderTotal(order);
                 return (
                   <div key={order.id} className="rounded-xl border border-sky-100 bg-white p-4 shadow-soft">
@@ -710,6 +888,11 @@ export default function DemoPosPage() {
                           <span className={order.completedAt ? "rounded-full bg-emerald-50 px-2 py-1 text-xs font-black text-emerald-700" : "rounded-full bg-orange-50 px-2 py-1 text-xs font-black text-orange-700"}>
                             {order.completedAt ? "Đã trả đồ" : "Đang xử lý"}
                           </span>
+                          {order.isDemo && (
+                            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">
+                              Demo
+                            </span>
+                          )}
                         </div>
                         <div className="mt-1 text-sm font-semibold text-slate-600">
                           {order.customerName} {order.customerPhone ? `· ${order.customerPhone}` : ""}
