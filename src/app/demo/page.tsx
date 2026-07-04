@@ -202,12 +202,10 @@ export default function DemoPosPage() {
   }
 
   async function syncOrderEvent(action: "create_order" | "complete_order" | "delete_order", order: DemoOrder) {
-    if (!webhookUrl.trim()) return;
     setSyncStatus("Đang gửi data online...");
     const payload = {
       source: "DN House POS",
       action,
-      webhookUrl: webhookUrl.trim(),
       token: webhookSecret.trim(),
       secret: webhookSecret.trim(),
       api_key: webhookSecret.trim(),

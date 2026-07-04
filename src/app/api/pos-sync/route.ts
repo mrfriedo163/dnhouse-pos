@@ -23,9 +23,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as PosPayload;
-    const webhookUrl = typeof body.webhookUrl === "string" && body.webhookUrl.trim()
-      ? body.webhookUrl.trim()
-      : DEFAULT_WEBHOOK_URL;
+    const webhookUrl = DEFAULT_WEBHOOK_URL;
 
     const payload = {
       ...body,
