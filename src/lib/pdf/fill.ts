@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { PDFDocument, PDFTextField, rgb, StandardFonts } from "pdf-lib";
 import { formatVnd } from "../calc";
 import type { Order, OrderItemInput, ShopInfo } from "../types";
@@ -68,6 +70,17 @@ function ascii(value: string): string {
     .replace(/[^\x20-\x7E]/g, "");
 }
 
+function shortServiceName(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.includes("giay")) return "Giay";
+  if (lower.includes("chan") || lower.includes("drap")) return "Chan";
+  if (lower.includes("tay")) return "Tay";
+  if (lower.includes("rem")) return "Rem";
+  if (lower.includes("giat say")) return "Giat say";
+  if (lower.includes("giat")) return "Giat";
+  return name;
+}
+
 function drawWrappedText(
   page: any,
   text: string,
@@ -95,53 +108,64 @@ function drawWrappedText(
 /** Fallback bill when no uploaded PDF template is active. */
 export async function buildDefaultBillPdf(data: BillData): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  const page = doc.addPage([420, 595]);
+  // 70x50mm thermal label: 198.4 x 141.7 pt.
+  const page = doc.addPage([198.4, 141.7]);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const navy = rgb(0.07, 0.13, 0.28);
-  const muted = rgb(0.35, 0.39, 0.5);
-  const line = rgb(0.86, 0.9, 0.95);
+  const navy = rgb(0.06, 0.13, 0.32);
+  const muted = rgb(0.2, 0.24, 0.35);
+  const line = rgb(0.06, 0.13, 0.32);
   const values = buildBillValues(data);
 
-  page.drawText(ascii(values.shop_name || "DN House"), { x: 32, y: 548, size: 18, font: bold, color: navy });
-  page.drawText("PHIEU NHAN DO / BILL", { x: 32, y: 522, size: 13, font: bold, color: navy });
-  page.drawText(`Ma don: ${ascii(values.order_no)}`, { x: 280, y: 548, size: 10, font: bold, color: navy });
-  page.drawText(`Ngay nhan: ${ascii(values.received_at)}`, { x: 280, y: 532, size: 9, font, color: muted });
-  page.drawLine({ start: { x: 32, y: 506 }, end: { x: 388, y: 506 }, thickness: 1, color: line });
+  page.drawRectangle({ x: 2, y: 2, width: 194.4, height: 137.7, borderColor: navy, borderWidth: 1.2, color: rgb(1, 1, 1) });
 
-  let y = 482;
-  page.drawText(`Khach: ${ascii(values.customer_name || "-")}`, { x: 32, y, size: 11, font: bold, color: navy });
-  page.drawText(`SDT: ${ascii(values.customer_phone || "-")}`, { x: 250, y, size: 11, font: bold, color: navy });
-  y -= 22;
-  if (values.due_at) {
-    page.drawText(`Hen tra: ${ascii(values.due_at)}`, { x: 32, y, size: 10, font, color: muted });
-    y -= 22;
+  try {
+    const logoPath = path.join(process.cwd(), "public", "dn-house-logo.jpg");
+    const logoBytes = await readFile(logoPath);
+    const logo = await doc.embedJpg(logoBytes);
+    page.drawImage(logo, { x: 8, y: 105, width: 26, height: 26 });
+  } catch {
+    page.drawRectangle({ x: 8, y: 105, width: 26, height: 26, borderColor: navy, borderWidth: 0.8 });
   }
 
-  page.drawText("Dich vu", { x: 32, y, size: 12, font: bold, color: navy });
-  y -= 16;
-  for (const item of values.service_table.split("\n").filter(Boolean)) {
-    y = drawWrappedText(page, item, 42, y, { size: 10, font, maxWidth: 320, lineHeight: 14, color: navy });
-  }
+  page.drawText("GIAT SAY", { x: 40, y: 123, size: 8.5, font: bold, color: navy });
+  page.drawText("DN House", { x: 40, y: 107, size: 18, font: bold, color: navy });
+  page.drawText("PHIEU HEN / BILL", { x: 125, y: 123, size: 6.8, font: bold, color: navy });
+  page.drawText(ascii(values.order_no), { x: 126, y: 111, size: 7.8, font: bold, color: navy });
+  page.drawLine({ start: { x: 8, y: 99 }, end: { x: 190, y: 99 }, thickness: 0.7, color: line });
 
-  y = Math.max(y - 8, 148);
-  page.drawLine({ start: { x: 32, y }, end: { x: 388, y }, thickness: 1, color: line });
-  y -= 22;
-  page.drawText("Tam tinh", { x: 230, y, size: 10, font, color: muted });
-  page.drawText(ascii(values.subtotal), { x: 320, y, size: 10, font: bold, color: navy });
-  y -= 18;
-  page.drawText("Giam", { x: 230, y, size: 10, font, color: muted });
-  page.drawText(ascii(values.discount_total), { x: 320, y, size: 10, font: bold, color: navy });
-  y -= 22;
-  page.drawText("Tong cong", { x: 230, y, size: 12, font: bold, color: navy });
-  page.drawText(ascii(values.final_total), { x: 320, y, size: 12, font: bold, color: navy });
+  page.drawText("Khach:", { x: 9, y: 88, size: 8, font: bold, color: navy });
+  drawWrappedText(page, values.customer_name || "-", 40, 88, { size: 8, font: bold, maxWidth: 82, lineHeight: 8, color: navy });
+  page.drawText("SDT:", { x: 126, y: 88, size: 8, font: bold, color: navy });
+  page.drawText(ascii(values.customer_phone || "-"), { x: 148, y: 88, size: 8, font: bold, color: navy });
 
-  let footerY = 88;
+  const services = data.items.map((it) => {
+    const qty = Number(it.quantity);
+    const qtyText = Number.isInteger(qty) ? String(qty) : String(qty).replace(".", ",");
+    return `${shortServiceName(ascii(it.service_name_snapshot))} ${qtyText}${ascii(it.unit_type ?? "")}`;
+  });
+  page.drawText("DV:", { x: 9, y: 73, size: 8, font: bold, color: navy });
+  drawWrappedText(page, services.join(" / ") || "-", 28, 73, { size: 7.2, font: bold, maxWidth: 162, lineHeight: 8, color: navy });
+
+  page.drawText("Gia:", { x: 9, y: 57, size: 8, font: bold, color: navy });
+  page.drawText(ascii(values.subtotal), { x: 32, y: 57, size: 8, font: bold, color: navy });
+  page.drawText("Giam:", { x: 88, y: 57, size: 7.4, font, color: muted });
+  page.drawText(ascii(values.discount_total), { x: 116, y: 57, size: 7.4, font, color: muted });
+
+  page.drawText("TT:", { x: 9, y: 42, size: 8, font: bold, color: navy });
+  page.drawText(ascii(values.final_total), { x: 31, y: 40, size: 12, font: bold, color: navy });
+  page.drawText("Trang thai:", { x: 102, y: 43, size: 7, font, color: muted });
+  page.drawText("Chua tra", { x: 145, y: 43, size: 7.5, font: bold, color: navy });
+
+  page.drawText("Nhan:", { x: 9, y: 27, size: 7, font: bold, color: navy });
+  page.drawText(ascii(values.received_at), { x: 35, y: 27, size: 6.5, font, color: muted });
+  page.drawText("Hen:", { x: 111, y: 27, size: 7, font: bold, color: navy });
+  page.drawText(ascii(values.due_at || "-"), { x: 132, y: 27, size: 6.5, font, color: muted });
+
   if (values.note) {
-    footerY = drawWrappedText(page, `Ghi chu: ${values.note}`, 32, footerY, { size: 9, font, maxWidth: 340, lineHeight: 12, color: muted });
+    drawWrappedText(page, `GC: ${values.note}`, 9, 16, { size: 6, font, maxWidth: 180, lineHeight: 6.5, color: muted });
   }
-  page.drawText("Cam on quy khach da su dung dich vu DN House.", { x: 32, y: 38, size: 9, font: bold, color: navy });
-  page.drawText(ascii(`${values.shop_phone} - ${values.shop_address}`), { x: 32, y: 24, size: 8, font, color: muted });
+  page.drawText("Zalo: 0945.632.853 - 0917.115.374", { x: 38, y: 6, size: 6.6, font: bold, color: navy });
 
   return doc.save();
 }
