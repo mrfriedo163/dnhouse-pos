@@ -1,4 +1,4 @@
-import { PDFDocument, PDFTextField } from "pdf-lib";
+import { PDFDocument, PDFTextField, rgb, StandardFonts } from "pdf-lib";
 import { formatVnd } from "../calc";
 import type { Order, OrderItemInput, ShopInfo } from "../types";
 
@@ -57,6 +57,93 @@ export function buildBillValues(data: BillData): Record<string, string> {
     note: data.order.note ?? "",
     created_by: data.createdBy,
   };
+}
+
+function ascii(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .replace(/[^\x20-\x7E]/g, "");
+}
+
+function drawWrappedText(
+  page: any,
+  text: string,
+  x: number,
+  y: number,
+  options: { size: number; font: any; maxWidth: number; lineHeight: number; color?: any },
+) {
+  const words = ascii(text).split(/\s+/);
+  let line = "";
+  let cursorY = y;
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (options.font.widthOfTextAtSize(next, options.size) > options.maxWidth && line) {
+      page.drawText(line, { x, y: cursorY, size: options.size, font: options.font, color: options.color });
+      cursorY -= options.lineHeight;
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) page.drawText(line, { x, y: cursorY, size: options.size, font: options.font, color: options.color });
+  return cursorY - options.lineHeight;
+}
+
+/** Fallback bill when no uploaded PDF template is active. */
+export async function buildDefaultBillPdf(data: BillData): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([420, 595]);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const navy = rgb(0.07, 0.13, 0.28);
+  const muted = rgb(0.35, 0.39, 0.5);
+  const line = rgb(0.86, 0.9, 0.95);
+  const values = buildBillValues(data);
+
+  page.drawText(ascii(values.shop_name || "DN House"), { x: 32, y: 548, size: 18, font: bold, color: navy });
+  page.drawText("PHIEU NHAN DO / BILL", { x: 32, y: 522, size: 13, font: bold, color: navy });
+  page.drawText(`Ma don: ${ascii(values.order_no)}`, { x: 280, y: 548, size: 10, font: bold, color: navy });
+  page.drawText(`Ngay nhan: ${ascii(values.received_at)}`, { x: 280, y: 532, size: 9, font, color: muted });
+  page.drawLine({ start: { x: 32, y: 506 }, end: { x: 388, y: 506 }, thickness: 1, color: line });
+
+  let y = 482;
+  page.drawText(`Khach: ${ascii(values.customer_name || "-")}`, { x: 32, y, size: 11, font: bold, color: navy });
+  page.drawText(`SDT: ${ascii(values.customer_phone || "-")}`, { x: 250, y, size: 11, font: bold, color: navy });
+  y -= 22;
+  if (values.due_at) {
+    page.drawText(`Hen tra: ${ascii(values.due_at)}`, { x: 32, y, size: 10, font, color: muted });
+    y -= 22;
+  }
+
+  page.drawText("Dich vu", { x: 32, y, size: 12, font: bold, color: navy });
+  y -= 16;
+  for (const item of values.service_table.split("\n").filter(Boolean)) {
+    y = drawWrappedText(page, item, 42, y, { size: 10, font, maxWidth: 320, lineHeight: 14, color: navy });
+  }
+
+  y = Math.max(y - 8, 148);
+  page.drawLine({ start: { x: 32, y }, end: { x: 388, y }, thickness: 1, color: line });
+  y -= 22;
+  page.drawText("Tam tinh", { x: 230, y, size: 10, font, color: muted });
+  page.drawText(ascii(values.subtotal), { x: 320, y, size: 10, font: bold, color: navy });
+  y -= 18;
+  page.drawText("Giam", { x: 230, y, size: 10, font, color: muted });
+  page.drawText(ascii(values.discount_total), { x: 320, y, size: 10, font: bold, color: navy });
+  y -= 22;
+  page.drawText("Tong cong", { x: 230, y, size: 12, font: bold, color: navy });
+  page.drawText(ascii(values.final_total), { x: 320, y, size: 12, font: bold, color: navy });
+
+  let footerY = 88;
+  if (values.note) {
+    footerY = drawWrappedText(page, `Ghi chu: ${values.note}`, 32, footerY, { size: 9, font, maxWidth: 340, lineHeight: 12, color: muted });
+  }
+  page.drawText("Cam on quy khach da su dung dich vu DN House.", { x: 32, y: 38, size: 9, font: bold, color: navy });
+  page.drawText(ascii(`${values.shop_phone} - ${values.shop_address}`), { x: 32, y: 24, size: 8, font, color: muted });
+
+  return doc.save();
 }
 
 /**

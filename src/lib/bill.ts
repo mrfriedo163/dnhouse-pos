@@ -1,7 +1,7 @@
 import { createAdminClient } from "./supabase/admin";
 import { getConnectedDrive } from "./google/store";
 import { ensureDatedFolder, uploadFile } from "./google/drive";
-import { fillBillPdf } from "./pdf/fill";
+import { buildDefaultBillPdf, fillBillPdf } from "./pdf/fill";
 import type { BillData } from "./pdf/fill";
 import type { ShopInfo } from "./types";
 
@@ -9,7 +9,7 @@ import type { ShopInfo } from "./types";
 export async function loadBillData(orderId: string): Promise<BillData> {
   const admin = createAdminClient();
   const { data: order } = await admin.from("orders").select("*").eq("id", orderId).single();
-  if (!order) throw new Error("Không tìm thấy đơn.");
+  if (!order) throw new Error("Khong tim thay don.");
 
   const { data: items } = await admin.from("order_items").select("*").eq("order_id", orderId);
   const { data: shopRow } = await admin.from("app_settings").select("value").eq("key", "shop_info").maybeSingle();
@@ -52,15 +52,11 @@ async function loadActiveTemplate(): Promise<{ bytes: Uint8Array; mapping: Recor
   };
 }
 
-/** Generate filled bill PDF bytes for an order. Throws NO_ACTIVE_TEMPLATE if none set. */
+/** Generate bill PDF bytes. Falls back to a built-in bill if no uploaded template is active. */
 export async function generateBillPdf(orderId: string): Promise<Uint8Array> {
   const template = await loadActiveTemplate();
-  if (!template) {
-    const err = new Error("Chưa có mẫu PDF đang hoạt động. Hãy tải lên và bật mẫu trong mục Mẫu PDF.");
-    (err as any).code = "NO_ACTIVE_TEMPLATE";
-    throw err;
-  }
   const data = await loadBillData(orderId);
+  if (!template) return buildDefaultBillPdf(data);
   return fillBillPdf(template.bytes, template.mapping, data, true);
 }
 
@@ -74,13 +70,13 @@ export async function generateAndUploadBill(orderId: string): Promise<{ ok: bool
   try {
     pdf = await generateBillPdf(orderId);
   } catch (e: any) {
-    return { ok: false, warning: e?.message ?? "Không tạo được PDF bill" };
+    return { ok: false, warning: e?.message ?? "Khong tao duoc PDF bill" };
   }
 
   try {
     const { drive, settings } = await getConnectedDrive();
     const { data: order } = await admin.from("orders").select("order_no, received_at").eq("id", orderId).single();
-    if (!order) return { ok: false, warning: "Không tìm thấy đơn để tạo bill." };
+    if (!order) return { ok: false, warning: "Khong tim thay don de tao bill." };
 
     const folderId = await ensureDatedFolder(drive, settings.root_folder_id!, "Bills", new Date(order.received_at));
     const upload = await uploadFile(drive, folderId, `${order.order_no}.pdf`, "application/pdf", Buffer.from(pdf));
@@ -96,7 +92,7 @@ export async function generateAndUploadBill(orderId: string): Promise<{ ok: bool
   } catch (e: any) {
     return {
       ok: false,
-      warning: e?.code === "NOT_CONNECTED" ? "Google Drive chưa kết nối." : (e?.message ?? "Drive upload failed"),
+      warning: e?.code === "NOT_CONNECTED" ? "Google Drive chua ket noi." : (e?.message ?? "Drive upload failed"),
     };
   }
 }
