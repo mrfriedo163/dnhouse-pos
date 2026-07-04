@@ -8,12 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 
-const ACCOUNTS = [
-  { id: "dung", name: "Dung", email: "dung@dnhouse.local", role: "admin" },
-  { id: "ngan", name: "Ngan", email: "ngan@dnhouse.local", role: "staff" },
-  { id: "thi", name: "Thi", email: "thi@dnhouse.local", role: "staff" },
-  { id: "chame", name: "chame", email: "chame@dnhouse.local", role: "staff" },
-] as const;
+const ACCOUNTS: Record<string, string> = {
+  dung: "dung@dnhouse.local",
+  ngan: "ngan@dnhouse.local",
+  thi: "thi@dnhouse.local",
+  chame: "chame@dnhouse.local",
+};
+
+function normalizeAccount(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, "");
+}
 
 function withTimeout<T>(promise: Promise<T>, message: string, ms = 15_000): Promise<T> {
   return Promise.race([
@@ -26,21 +30,19 @@ function withTimeout<T>(promise: Promise<T>, message: string, ms = 15_000): Prom
 
 export default function LoginPage() {
   const router = useRouter();
-  const [accountId, setAccountId] = useState<(typeof ACCOUNTS)[number]["id"]>("dung");
+  const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const selectedAccount = ACCOUNTS.find((account) => account.id === accountId) ?? ACCOUNTS[0];
-
   async function ensureInternalUsers() {
     const response = await withTimeout(
       fetch("/api/internal-users/ensure", { method: "POST" }),
-      "Không tạo được tài khoản nội bộ sau 15 giây. Kiểm tra biến môi trường Supabase trên Vercel.",
+      "Không thể chuẩn bị tài khoản nội bộ. Vui lòng thử lại.",
     );
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result.ok) {
-      throw new Error(result.error ?? "Không tạo được tài khoản nội bộ.");
+      throw new Error(result.error ?? "Không thể chuẩn bị tài khoản nội bộ.");
     }
   }
 
@@ -50,18 +52,22 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      const email = ACCOUNTS[normalizeAccount(account)];
+      if (!email) {
+        throw new Error("Tài khoản hoặc mật khẩu không đúng.");
+      }
+
       await ensureInternalUsers();
 
       const supabase = createClient();
       const { error } = await withTimeout(
-        supabase.auth.signInWithPassword({
-          email: selectedAccount.email,
-          password,
-        }),
-        "Supabase không phản hồi sau 15 giây. Kiểm tra lại cấu hình Supabase/Vercel.",
+        supabase.auth.signInWithPassword({ email, password }),
+        "Hệ thống phản hồi chậm. Vui lòng thử lại.",
       );
 
-      if (error) throw error;
+      if (error) {
+        throw new Error("Tài khoản hoặc mật khẩu không đúng.");
+      }
 
       router.replace("/dashboard");
       router.refresh();
@@ -89,24 +95,21 @@ export default function LoginPage() {
           />
           <h1 className="mt-4 text-2xl font-black text-navy">DN House POS</h1>
           <p className="mt-1 text-sm font-semibold text-slate-500">
-            Đăng nhập tài khoản nội bộ để quản lý đơn
+            Đăng nhập để vào phần mềm quản lý nội bộ
           </p>
         </div>
 
         <form onSubmit={submit} className="space-y-4">
           <div>
             <Label>Tài khoản</Label>
-            <select
-              value={accountId}
-              onChange={(e) => setAccountId(e.target.value as typeof accountId)}
-              className="mt-1 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-navy outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
-            >
-              {ACCOUNTS.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name} {account.role === "admin" ? "- Admin" : "- Nhân viên"}
-                </option>
-              ))}
-            </select>
+            <Input
+              value={account}
+              onChange={(e) => setAccount(e.target.value)}
+              autoCapitalize="none"
+              autoComplete="username"
+              autoCorrect="off"
+              required
+            />
           </div>
 
           <div>
@@ -115,9 +118,9 @@ export default function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
               required
               minLength={6}
-              placeholder="123456789"
             />
           </div>
 
@@ -131,10 +134,6 @@ export default function LoginPage() {
             {loading ? "Đang xử lý..." : "Đăng nhập"}
           </Button>
         </form>
-
-        <div className="mt-4 rounded-xl bg-sky-50 px-3 py-3 text-sm font-semibold text-slate-600">
-          Mật khẩu chung: <span className="font-black text-navy">123456789</span>
-        </div>
       </Card>
     </main>
   );

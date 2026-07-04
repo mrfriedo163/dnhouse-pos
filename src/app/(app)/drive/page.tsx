@@ -13,6 +13,12 @@ export default async function DrivePage() {
   const { data } = await admin.from("drive_settings").select("*").limit(1).maybeSingle();
 
   const status = data?.connected ? "connected" : "not_connected";
+  const driveConfigured = Boolean(
+    process.env.GOOGLE_CLIENT_ID &&
+    process.env.GOOGLE_CLIENT_SECRET &&
+    process.env.GOOGLE_REDIRECT_URI &&
+    process.env.DRIVE_TOKEN_ENC_KEY,
+  );
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold">Google Drive</h1>
@@ -23,7 +29,7 @@ export default async function DrivePage() {
         </p>
         {data?.last_test_at && <p className="text-xs text-slate-400">Test gần nhất: {new Date(data.last_test_at).toLocaleString("vi-VN")}</p>}
       </Card>
-      <DriveActions connected={status === "connected"} rootUrl={data?.root_folder_url ?? null} />
+      <DriveActions connected={status === "connected"} configured={driveConfigured} rootUrl={data?.root_folder_url ?? null} />
       <p className="text-xs text-slate-400">
         Chỉ Admin cần kết nối Drive. Nhân viên không cần quyền Drive. Token được mã hoá (AES-256-GCM) trước khi lưu.
       </p>
