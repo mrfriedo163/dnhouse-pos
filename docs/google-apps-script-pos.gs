@@ -162,6 +162,7 @@ function listOrders(data) {
         is_completed: Boolean(row[11]),
         completed_at: row[12] ? toIso_(row[12]) : '',
         status: status,
+        status_code: status === 'Đã xóa' ? 'deleted' : 'active',
         data_mode: row[17] || 'Thật',
         target_sheet: sheet.getName()
       });
@@ -239,11 +240,11 @@ function setupReport_(ss, date) {
   report.getRange('A4').setValue('Tổng số đơn thật');
   report.getRange('B4').setFormula(`=COUNTA(${realSheet}!B2:B)`);
   report.getRange('A5').setValue('Doanh thu thật chưa xóa');
-  report.getRange('B5').setFormula(`=SUMIFS(${realSheet}!J2:J, ${realSheet}!N2:N, "<>Đã xóa")`);
+  report.getRange('B5').setFormula(`=SUMIFS(${realSheet}!J2:J; ${realSheet}!N2:N; "<>Đã xóa")`);
   report.getRange('A6').setValue('Tổng giảm giá thật chưa xóa');
-  report.getRange('B6').setFormula(`=SUMIFS(${realSheet}!I2:I, ${realSheet}!N2:N, "<>Đã xóa")`);
+  report.getRange('B6').setFormula(`=SUMIFS(${realSheet}!I2:I; ${realSheet}!N2:N; "<>Đã xóa")`);
   report.getRange('A7').setValue('Số đơn đã xóa');
-  report.getRange('B7').setFormula(`=COUNTIF(${realSheet}!N2:N, "Đã xóa")`);
+  report.getRange('B7').setFormula(`=COUNTIF(${realSheet}!N2:N; "Đã xóa")`);
   report.getRange('A8').setValue('Số đơn demo');
   report.getRange('B8').setFormula(`=COUNTA(${demoSheet}!B2:B)`);
   report.getRange('A1:B1').setFontWeight('bold');

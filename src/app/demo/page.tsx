@@ -46,6 +46,7 @@ type RemoteOrder = {
   is_completed?: boolean;
   completed_at?: string;
   status?: string;
+  status_code?: string;
   data_mode?: string;
   target_sheet?: string;
 };
@@ -150,7 +151,7 @@ function remoteOrderToLocal(order: RemoteOrder): DemoOrder | null {
 function mergeRemoteOrders(current: DemoOrder[], remoteOrders: RemoteOrder[]) {
   const deletedOrderNos = new Set(
     remoteOrders
-      .filter((order) => order.status === "Đã xóa" && order.order_no)
+      .filter((order) => (order.status_code === "deleted" || order.status === "Đã xóa" || order.status === "ÄÃ£ xÃ³a") && order.order_no)
       .map((order) => String(order.order_no)),
   );
   const byOrderNo = new Map<string, DemoOrder>();
@@ -160,7 +161,7 @@ function mergeRemoteOrders(current: DemoOrder[], remoteOrders: RemoteOrder[]) {
   }
 
   for (const remote of remoteOrders) {
-    if (remote.status === "Đã xóa") continue;
+    if (remote.status_code === "deleted" || remote.status === "Đã xóa" || remote.status === "ÄÃ£ xÃ³a") continue;
     const local = remoteOrderToLocal(remote);
     if (!local) continue;
     const existing = byOrderNo.get(local.orderNo);
