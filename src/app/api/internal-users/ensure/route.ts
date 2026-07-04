@@ -10,6 +10,14 @@ const INTERNAL_USERS = [
   { email: "chame@dnhouse.local", fullName: "chame", role: "staff" },
 ] as const;
 
+function missingSupabaseEnv() {
+  return [
+    ["NEXT_PUBLIC_SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL],
+    ["NEXT_PUBLIC_SUPABASE_ANON_KEY", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY],
+    ["SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY],
+  ].filter(([, value]) => !value).map(([key]) => key);
+}
+
 async function findUserIdByEmail(admin: ReturnType<typeof createAdminClient>, email: string) {
   let page = 1;
 
@@ -28,6 +36,18 @@ async function findUserIdByEmail(admin: ReturnType<typeof createAdminClient>, em
 
 export async function POST() {
   try {
+    const missing = missingSupabaseEnv();
+
+    if (missing.length > 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Vercel đang thiếu biến môi trường: ${missing.join(", ")}. Thêm đủ biến trong Vercel rồi redeploy để app tự tạo 4 tài khoản.`,
+        },
+        { status: 500 },
+      );
+    }
+
     const admin = createAdminClient();
     const ensured = [];
 
