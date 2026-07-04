@@ -1,4 +1,5 @@
 import { google, drive_v3 } from "googleapis";
+import { Readable } from "node:stream";
 import { makeOAuthClient, type StoredTokens } from "./oauth";
 
 /** Build an authenticated Drive client from stored tokens (auto-refreshes). */
@@ -93,7 +94,6 @@ export async function uploadFile(
   mimeType: string,
   data: Buffer,
 ): Promise<UploadResult> {
-  const { Readable } = await import("node:stream");
   const res = await drive.files.create({
     requestBody: { name: fileName, parents: [folderId] },
     media: { mimeType, body: Readable.from(data) },
