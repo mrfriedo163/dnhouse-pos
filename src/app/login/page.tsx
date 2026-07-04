@@ -8,6 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 
+function withTimeout<T>(promise: Promise<T>, message: string, ms = 15_000): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error(message)), ms);
+    }),
+  ]);
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -24,14 +33,25 @@ export default function LoginPage() {
     const supabase = createClient();
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { full_name: fullName } },
-        });
+        const { data, error } = await withTimeout(
+          supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { full_name: fullName } },
+          }),
+          "Supabase không phản hồi sau 15 giây. Kiểm tra lại cấu hình Supabase/Vercel.",
+        );
         if (error) throw error;
+        if (!data.session) {
+          setMode("signin");
+          setError("Tài khoản đã được tạo. Nếu Supabase yêu cầu xác nhận email, hãy mở email xác nhận rồi đăng nhập lại.");
+          return;
+        }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await withTimeout(
+          supabase.auth.signInWithPassword({ email, password }),
+          "Supabase không phản hồi sau 15 giây. Kiểm tra lại cấu hình Supabase/Vercel.",
+        );
         if (error) throw error;
       }
       router.replace("/dashboard");
