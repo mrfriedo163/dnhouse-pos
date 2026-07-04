@@ -24,6 +24,7 @@ async function fetchOrders(startIso: string, endIso: string): Promise<Order[]> {
   const { data, error } = await admin
     .from("orders")
     .select("*")
+    .is("deleted_at", null)
     .gte("received_at", startIso)
     .lte("received_at", endIso)
     .order("received_at", { ascending: true });

@@ -16,7 +16,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     completed_note: body.completed_note ?? null,
     updated_at: new Date().toISOString(),
     updated_by: profile.id,
-  }).eq("id", params.id).select("*").single();
+  }).eq("id", params.id).is("deleted_at", null).select("*").single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await admin.from("audit_logs").insert({
@@ -30,11 +30,11 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   const profile = await getCurrentProfile();
   if (!profile || profile.role !== "admin") return NextResponse.json({ error: "Admin only" }, { status: 403 });
   const admin = createAdminClient();
-  const { data: before } = await admin.from("orders").select("*").eq("id", params.id).single();
+  const { data: before } = await admin.from("orders").select("*").eq("id", params.id).is("deleted_at", null).single();
   const { error } = await admin.from("orders").update({
     is_completed: false, completed_at: null, completed_by: null, completed_note: null,
     updated_at: new Date().toISOString(), updated_by: profile.id,
-  }).eq("id", params.id);
+  }).eq("id", params.id).is("deleted_at", null);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await admin.from("audit_logs").insert({
     actor_id: profile.id, action: "order.uncomplete", entity_type: "order", entity_id: params.id, before_data: before,

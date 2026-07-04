@@ -17,17 +17,30 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   }
 }
 
-// DELETE: admin-only hard delete with audit log.
-export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
+// DELETE: admin-only soft delete. The row stays in Supabase for audit/tax review.
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   const profile = await getCurrentProfile();
   if (!profile || profile.role !== "admin") return NextResponse.json({ error: "Admin only" }, { status: 403 });
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const admin = createAdminClient();
+  const body = await request.json().catch(() => ({}));
   const { data: before } = await admin.from("orders").select("*").eq("id", params.id).single();
-  const { error } = await admin.from("orders").delete().eq("id", params.id);
+  const deletedAt = new Date().toISOString();
+  const { data: order, error } = await admin.from("orders").update({
+    deleted_at: deletedAt,
+    deleted_by: profile.id,
+    delete_reason: body.delete_reason ?? null,
+    updated_at: deletedAt,
+    updated_by: profile.id,
+  }).eq("id", params.id).select("*").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await admin.from("audit_logs").insert({
-    actor_id: profile.id, action: "order.delete", entity_type: "order", entity_id: params.id, before_data: before,
+    actor_id: profile.id,
+    action: "order.delete",
+    entity_type: "order",
+    entity_id: params.id,
+    before_data: before,
+    after_data: { deleted_at: deletedAt, delete_reason: body.delete_reason ?? null },
   });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, order });
 }

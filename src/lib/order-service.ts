@@ -96,7 +96,7 @@ export async function updateOrder(
   actorProfileId: string,
 ) {
   const admin = createAdminClient();
-  const { data: before } = await admin.from("orders").select("*").eq("id", orderId).single();
+  const { data: before } = await admin.from("orders").select("*").eq("id", orderId).is("deleted_at", null).single();
   if (!before) throw new Error("Order not found");
 
   const items = input.items
@@ -118,7 +118,7 @@ export async function updateOrder(
     note: input.note ?? null,
     updated_at: new Date().toISOString(),
     updated_by: actorProfileId,
-  }).eq("id", orderId).select("*").single();
+  }).eq("id", orderId).is("deleted_at", null).select("*").single();
   if (error) throw error;
 
   // Replace items.

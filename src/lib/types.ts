@@ -57,6 +57,9 @@ export interface Order {
   bill_drive_web_url: string | null;
   created_by: string | null;
   created_at: string;
+  deleted_at: string | null;
+  deleted_by: string | null;
+  delete_reason: string | null;
 }
 
 export interface ShopInfo {

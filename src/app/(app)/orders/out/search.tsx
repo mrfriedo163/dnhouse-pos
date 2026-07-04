@@ -17,7 +17,13 @@ export function OutSearch() {
     setBusy(true);
     const supabase = createClient();
     const term = q.trim();
-    let query = supabase.from("orders").select("*").order("is_completed").order("received_at", { ascending: false }).limit(30);
+    let query = supabase
+      .from("orders")
+      .select("*")
+      .is("deleted_at", null)
+      .order("is_completed")
+      .order("received_at", { ascending: false })
+      .limit(30);
     if (term) query = query.or(`order_no.ilike.%${term}%,customer_phone.ilike.%${term}%,customer_name.ilike.%${term}%`);
     else query = query.eq("is_completed", false);
     const { data } = await query;
@@ -26,9 +32,10 @@ export function OutSearch() {
   }
 
   async function complete(id: string) {
-    const note = window.prompt("Ghi chú hoàn thành (tuỳ chọn):") ?? "";
+    const note = window.prompt("Ghi chú hoàn thành (tùy chọn):") ?? "";
     const res = await fetch(`/api/orders/${id}/complete`, {
-      method: "POST", headers: { "content-type": "application/json" },
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ completed_note: note }),
     });
     if (res.ok) setRows((prev) => prev.map((o) => o.id === id ? { ...o, is_completed: true } : o));
@@ -45,7 +52,7 @@ export function OutSearch() {
         <Card key={o.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm">
             <div className="font-semibold">{o.order_no} — {o.customer_name ?? "khách lẻ"} {o.customer_phone ? `(${o.customer_phone})` : ""}</div>
-            <div className="text-slate-500">{formatVnd(o.final_total)} · {o.is_completed ? "✅ Đã trả" : "⏳ Chưa trả"} · nhận {new Date(o.received_at).toLocaleDateString("vi-VN")}</div>
+            <div className="text-slate-500">{formatVnd(o.final_total)} · {o.is_completed ? "Đã trả" : "Chưa trả"} · nhận {new Date(o.received_at).toLocaleDateString("vi-VN")}</div>
           </div>
           {!o.is_completed && <Button onClick={() => complete(o.id)}>Đã giao đồ / Hoàn thành đơn</Button>}
         </Card>

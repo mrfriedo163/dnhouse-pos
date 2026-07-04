@@ -26,6 +26,7 @@ export default async function Dashboard() {
   const { data: todayOrders } = await supabase
     .from("orders")
     .select("*")
+    .is("deleted_at", null)
     .gte("received_at", start)
     .lte("received_at", end);
   const orders = todayOrders ?? [];
@@ -36,10 +37,12 @@ export default async function Dashboard() {
   const { count: pendingCount } = await supabase
     .from("orders")
     .select("id", { count: "exact", head: true })
+    .is("deleted_at", null)
     .eq("is_completed", false);
   const { count: overdueCount } = await supabase
     .from("orders")
     .select("id", { count: "exact", head: true })
+    .is("deleted_at", null)
     .eq("is_completed", false)
     .lt("due_at", nowIso);
 

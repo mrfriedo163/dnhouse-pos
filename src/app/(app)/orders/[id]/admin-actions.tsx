@@ -9,12 +9,24 @@ export function AdminOrderActions({ orderId, isCompleted }: { orderId: string; i
   async function undo() {
     if (!confirm("Hoàn tác hoàn thành đơn này?")) return;
     const res = await fetch(`/api/orders/${orderId}/complete`, { method: "DELETE" });
-    if (res.ok) router.refresh(); else alert("Không thể hoàn tác");
+    if (res.ok) router.refresh();
+    else alert("Không thể hoàn tác");
   }
+
   async function del() {
-    if (!confirm("Xoá đơn này? Hành động được ghi audit log và không thể hoàn tác.")) return;
-    const res = await fetch(`/api/orders/${orderId}`, { method: "DELETE" });
-    if (res.ok) { router.push("/orders"); router.refresh(); } else alert("Không thể xoá");
+    if (!confirm("Đánh dấu xóa đơn này? Đơn sẽ ẩn khỏi vận hành nhưng vẫn giữ trong data để đối soát.")) return;
+    const reason = window.prompt("Lý do xóa (tùy chọn):") ?? "";
+    const res = await fetch(`/api/orders/${orderId}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ delete_reason: reason }),
+    });
+    if (res.ok) {
+      router.push("/orders");
+      router.refresh();
+    } else {
+      alert("Không thể xóa");
+    }
   }
 
   return (
@@ -22,7 +34,7 @@ export function AdminOrderActions({ orderId, isCompleted }: { orderId: string; i
       <span className="w-full text-xs text-slate-400">Thao tác quản trị</span>
       <Link href={`/orders/${orderId}/edit`}><Button variant="secondary">Sửa đơn</Button></Link>
       {isCompleted && <Button variant="secondary" onClick={undo}>Hoàn tác hoàn thành</Button>}
-      <Button variant="danger" onClick={del}>Xoá đơn</Button>
+      <Button variant="danger" onClick={del}>Đánh dấu xóa</Button>
     </div>
   );
 }
