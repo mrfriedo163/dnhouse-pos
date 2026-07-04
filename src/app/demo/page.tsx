@@ -201,7 +201,7 @@ export default function DemoPosPage() {
     setLoginPassword("");
   }
 
-  async function syncOrderEvent(action: "create_order" | "complete_order", order: DemoOrder) {
+  async function syncOrderEvent(action: "create_order" | "complete_order" | "delete_order", order: DemoOrder) {
     if (!webhookUrl.trim()) return;
     setSyncStatus("Đang gửi data online...");
     const payload = {
@@ -251,13 +251,15 @@ export default function DemoPosPage() {
       const syncedAt = new Date().toISOString();
       setOrders((current) => current.map((item) => item.id === order.id ? { ...item, syncedAt } : item));
       setSyncStatus("Đã gửi data online.");
+      return true;
     } catch (error) {
       setSyncStatus("Chưa gửi được data online. Kiểm tra webhook hoặc mã kết nối.");
+      return false;
     }
   }
 
   async function syncOrder(order: DemoOrder) {
-    await syncOrderEvent("create_order", order);
+    return syncOrderEvent("create_order", order);
   }
 
   async function syncPendingOrders() {
@@ -267,9 +269,12 @@ export default function DemoPosPage() {
       return;
     }
 
+    let syncedCount = 0;
     for (const order of pendingSyncOrders) {
-      await syncOrder(order);
+      const ok = await syncOrder(order);
+      if (ok) syncedCount += 1;
     }
+    setSyncStatus(`Đã đồng bộ lại ${syncedCount}/${pendingSyncOrders.length} đơn.`);
   }
 
   function printInvoice(order: DemoOrder) {
@@ -435,8 +440,19 @@ export default function DemoPosPage() {
   }
 
   function deleteOrder(id: string) {
-    setOrders((current) => current.filter((order) => order.id !== id));
-    setSyncStatus("Đã xóa đơn trên app. Google Sheet hiện chưa bật xóa đơn online.");
+    const order = orders.find((item) => item.id === id);
+    if (!order) return;
+
+    void (async () => {
+      setSyncStatus("Đang ghi trạng thái đã xóa lên Google Sheet...");
+      const ok = await syncOrderEvent("delete_order", order);
+      if (ok) {
+        setOrders((current) => current.filter((item) => item.id !== id));
+        setSyncStatus("Đã xóa đơn trên app và đánh dấu Đã xóa trong Google Sheet.");
+      } else {
+        setSyncStatus("Chưa ghi được trạng thái xóa lên Sheet. Kiểm tra Apps Script đã có delete_order chưa.");
+      }
+    })();
   }
 
   if (!authLoaded) {
