@@ -90,7 +90,7 @@ export default async function OrderDetail({
         </div>
       </Card>
 
-      {!isDeleted && <PrintButtons billUrl={currentOrder.bill_drive_web_url} orderId={currentOrder.id} />}
+      {!isDeleted && <PrintButtons billUrl={currentOrder.bill_drive_web_url} orderId={currentOrder.id} orderNo={currentOrder.order_no} />}
       {profile?.role === "admin" && !isDeleted && <AdminOrderActions orderId={currentOrder.id} isCompleted={currentOrder.is_completed} />}
     </div>
   );
