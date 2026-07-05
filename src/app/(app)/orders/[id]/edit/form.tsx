@@ -1,4 +1,5 @@
 "use client";
+
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -7,8 +8,31 @@ import { Card } from "@/components/ui/card";
 import { computeOrderTotals, formatVnd } from "@/lib/calc";
 import type { DiscountType, Service, Order } from "@/lib/types";
 
-interface Line { key: string; service_id: string | null; name: string; unit_type: string; quantity: number; unit_price: number; }
-let c = 0;
+interface Line {
+  key: string;
+  service_id: string | null;
+  name: string;
+  unit_type: string;
+  quantity: number;
+  quantityText: string;
+  unit_price: number;
+}
+
+let counter = 0;
+
+function parseVietnameseNumber(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatQuantity(value: number) {
+  return Number.isInteger(value) ? String(value) : String(value).replace(".", ",");
+}
+
+function emptyLine(): Line {
+  return { key: `l${++counter}`, service_id: null, name: "", unit_type: "", quantity: 1, quantityText: "1", unit_price: 0 };
+}
 
 export function EditOrderForm({ order, items, services }: { order: Order; items: any[]; services: Service[] }) {
   const router = useRouter();
@@ -18,31 +42,73 @@ export function EditOrderForm({ order, items, services }: { order: Order; items:
   const [note, setNote] = useState(order.note ?? "");
   const [discountType, setDiscountType] = useState<DiscountType>(order.discount_type);
   const [discountValue, setDiscountValue] = useState(order.discount_value);
-  const [lines, setLines] = useState<Line[]>(items.map((it) => ({
-    key: `l${++c}`, service_id: it.service_id, name: it.service_name_snapshot,
-    unit_type: it.unit_type ?? "", quantity: Number(it.quantity), unit_price: Number(it.unit_price),
-  })));
+  const [lines, setLines] = useState<Line[]>(items.map((item) => {
+    const quantity = Number(item.quantity);
+    return {
+      key: `l${++counter}`,
+      service_id: item.service_id,
+      name: item.service_name_snapshot,
+      unit_type: item.unit_type ?? "",
+      quantity,
+      quantityText: formatQuantity(quantity),
+      unit_price: Number(item.unit_price),
+    };
+  }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const totals = useMemo(() => computeOrderTotals(lines.map((l) => ({ quantity: l.quantity, unit_price: l.unit_price })), discountType, discountValue), [lines, discountType, discountValue]);
-  const set = (k: string, p: Partial<Line>) => setLines((prev) => prev.map((l) => l.key === k ? { ...l, ...p } : l));
-  function pick(k: string, id: string) { const s = services.find((x) => x.id === id); if (s) set(k, { service_id: s.id, name: s.name, unit_type: s.unit_type, unit_price: s.default_price }); }
+  const totals = useMemo(
+    () => computeOrderTotals(lines.map((line) => ({ quantity: line.quantity, unit_price: line.unit_price })), discountType, discountValue),
+    [lines, discountType, discountValue],
+  );
+
+  function setLine(key: string, patch: Partial<Line>) {
+    setLines((prev) => prev.map((line) => line.key === key ? { ...line, ...patch } : line));
+  }
+
+  function setQuantity(key: string, value: string) {
+    setLine(key, { quantityText: value, quantity: parseVietnameseNumber(value) });
+  }
+
+  function pickService(key: string, id: string) {
+    const service = services.find((item) => item.id === id);
+    if (!service) return;
+    setLine(key, { service_id: service.id, name: service.name, unit_type: service.unit_type, unit_price: service.default_price });
+  }
 
   async function save(e: React.FormEvent) {
-    e.preventDefault(); setError(null);
+    e.preventDefault();
+    setError(null);
     const payload = {
-      customer_name: customerName || null, customer_phone: customerPhone || null,
+      customer_name: customerName || null,
+      customer_phone: customerPhone || null,
       due_at: dueAt ? new Date(dueAt).toISOString() : null,
-      discount_type: discountType, discount_value: discountValue, note: note || null,
-      items: lines.filter((l) => l.name && l.quantity > 0).map((l) => ({
-        service_id: l.service_id, service_name_snapshot: l.name, unit_type: l.unit_type || null, quantity: l.quantity, unit_price: l.unit_price,
+      discount_type: discountType,
+      discount_value: discountValue,
+      note: note || null,
+      items: lines.filter((line) => line.name && line.quantity > 0).map((line) => ({
+        service_id: line.service_id,
+        service_name_snapshot: line.name,
+        unit_type: line.unit_type || null,
+        quantity: line.quantity,
+        unit_price: line.unit_price,
       })),
     };
+
     setSaving(true);
-    const res = await fetch(`/api/orders/${order.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
-    if (res.ok) { router.push(`/orders/${order.id}`); router.refresh(); }
-    else { const j = await res.json().catch(() => ({})); setError(j.error ?? "Lưu thất bại"); setSaving(false); }
+    const res = await fetch(`/api/orders/${order.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      router.push(`/orders/${order.id}`);
+      router.refresh();
+    } else {
+      const json = await res.json().catch(() => ({}));
+      setError(json.error ?? "Lưu thất bại");
+      setSaving(false);
+    }
   }
 
   return (
@@ -52,33 +118,50 @@ export function EditOrderForm({ order, items, services }: { order: Order; items:
         <div><Label>SĐT</Label><Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} /></div>
         <div><Label>Hẹn trả</Label><Input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} /></div>
       </Card>
+
       <Card className="space-y-2">
-        {lines.map((l) => (
-          <div key={l.key} className="grid grid-cols-1 gap-2 sm:grid-cols-12 sm:items-end">
-            <div className="sm:col-span-4"><Label>Dịch vụ</Label>
-              <Select value={l.service_id ?? ""} onChange={(e) => pick(l.key, e.target.value)}>
-                <option value="">-- {l.name || "chọn"} --</option>
-                {services.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.unit_type})</option>)}
-              </Select></div>
-            <div className="sm:col-span-2"><Label>SL</Label><Input type="number" min={0} step="0.1" value={l.quantity} onChange={(e) => set(l.key, { quantity: Number(e.target.value) })} /></div>
-            <div className="sm:col-span-3"><Label>Đơn giá</Label><Input type="number" min={0} value={l.unit_price} onChange={(e) => set(l.key, { unit_price: Number(e.target.value) })} /></div>
-            <div className="sm:col-span-2 text-sm">{formatVnd(l.quantity * l.unit_price)}</div>
-            <div className="sm:col-span-1"><Button type="button" variant="ghost" onClick={() => setLines((p) => p.length > 1 ? p.filter((x) => x.key !== l.key) : p)}>✕</Button></div>
+        {lines.map((line) => (
+          <div key={line.key} className="grid grid-cols-1 gap-2 sm:grid-cols-12 sm:items-end">
+            <div className="sm:col-span-4">
+              <Label>Dịch vụ</Label>
+              <Select value={line.service_id ?? ""} onChange={(e) => pickService(line.key, e.target.value)}>
+                <option value="">-- {line.name || "chọn"} --</option>
+                {services.map((service) => <option key={service.id} value={service.id}>{service.name} ({service.unit_type})</option>)}
+              </Select>
+            </div>
+            <div className="sm:col-span-2">
+              <Label>SL</Label>
+              <Input inputMode="decimal" value={line.quantityText} placeholder="VD: 4,3" onChange={(e) => setQuantity(line.key, e.target.value)} />
+            </div>
+            <div className="sm:col-span-3">
+              <Label>Đơn giá</Label>
+              <Input type="number" min={0} value={line.unit_price} onChange={(e) => setLine(line.key, { unit_price: Number(e.target.value) })} />
+            </div>
+            <div className="sm:col-span-2 text-sm">{formatVnd(line.quantity * line.unit_price)}</div>
+            <div className="sm:col-span-1"><Button type="button" variant="ghost" onClick={() => setLines((prev) => prev.length > 1 ? prev.filter((item) => item.key !== line.key) : prev)}>x</Button></div>
           </div>
         ))}
-        <Button type="button" variant="secondary" onClick={() => setLines((p) => [...p, { key: `l${++c}`, service_id: null, name: "", unit_type: "", quantity: 1, unit_price: 0 }])}>+ Thêm dịch vụ</Button>
+        <Button type="button" variant="secondary" onClick={() => setLines((prev) => [...prev, emptyLine()])}>+ Thêm dịch vụ</Button>
       </Card>
+
       <Card className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-3">
-          <div><Label>Giảm giá</Label>
+          <div>
+            <Label>Giảm giá</Label>
             <Select value={discountType} onChange={(e) => setDiscountType(e.target.value as DiscountType)}>
-              <option value="none">Không</option><option value="percent">%</option><option value="fixed">Cố định</option>
-            </Select></div>
-          {discountType !== "none" && <div><Label>Giá trị</Label><Input type="number" min={0} value={discountValue} onChange={(e) => setDiscountValue(Number(e.target.value))} /></div>}
+              <option value="none">Không</option>
+              <option value="percent">%</option>
+              <option value="fixed">Cố định</option>
+            </Select>
+          </div>
+          {discountType !== "none" && (
+            <div><Label>Giá trị</Label><Input type="number" min={0} value={discountValue} onChange={(e) => setDiscountValue(Number(e.target.value))} /></div>
+          )}
         </div>
         <div><Label>Ghi chú</Label><Input value={note} onChange={(e) => setNote(e.target.value)} /></div>
         <div className="flex justify-between text-lg font-bold"><span>Tổng</span><span>{formatVnd(totals.final_total)}</span></div>
       </Card>
+
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex gap-2"><Button type="submit" disabled={saving}>{saving ? "Đang lưu..." : "Lưu thay đổi"}</Button></div>
     </form>
