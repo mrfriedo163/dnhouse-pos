@@ -55,6 +55,7 @@ export async function ensureRootStructure(
     ensureFolder(drive, "Declaration Drafts", rootId),
     ensureFolder(drive, "Templates", rootId),
     ensureFolder(drive, "Backups", rootId),
+    ensureFolder(drive, "Data Sheets", rootId),
   ]);
   const meta = await drive.files.get({ fileId: rootId, fields: "webViewLink" });
   return { rootId, rootUrl: meta.data.webViewLink ?? `https://drive.google.com/drive/folders/${rootId}` };
@@ -73,7 +74,7 @@ export function monthBucket(d: Date, timeZone = "Asia/Ho_Chi_Minh"): string {
 export async function ensureDatedFolder(
   drive: drive_v3.Drive,
   rootId: string,
-  section: "Bills" | "Daily Reports" | "Monthly Reports" | "Declaration Drafts",
+  section: "Bills" | "Daily Reports" | "Monthly Reports" | "Declaration Drafts" | "Data Sheets",
   date: Date,
 ): Promise<string> {
   const sectionId = await ensureFolder(drive, section, rootId);
@@ -102,6 +103,52 @@ export async function uploadFile(
   return {
     fileId: res.data.id!,
     webViewLink: res.data.webViewLink ?? `https://drive.google.com/file/d/${res.data.id}/view`,
+    name: res.data.name ?? fileName,
+  };
+}
+
+/** Find a non-trashed file by exact name under a parent folder. */
+export async function findFileByName(
+  drive: drive_v3.Drive,
+  folderId: string,
+  fileName: string,
+): Promise<UploadResult | null> {
+  const escaped = fileName.replace(/'/g, "\\'");
+  const res = await drive.files.list({
+    q: `name='${escaped}' and '${folderId}' in parents and trashed=false`,
+    fields: "files(id,webViewLink,name)",
+    pageSize: 1,
+  });
+  const file = res.data.files?.[0];
+  if (!file?.id) return null;
+  return {
+    fileId: file.id,
+    webViewLink: file.webViewLink ?? `https://drive.google.com/file/d/${file.id}/view`,
+    name: file.name ?? fileName,
+  };
+}
+
+/** Create a file if missing; otherwise replace its content in-place. */
+export async function upsertFile(
+  drive: drive_v3.Drive,
+  folderId: string,
+  fileName: string,
+  mimeType: string,
+  data: Buffer,
+): Promise<UploadResult> {
+  const existing = await findFileByName(drive, folderId, fileName);
+  if (!existing) return uploadFile(drive, folderId, fileName, mimeType, data);
+
+  const res = await drive.files.update({
+    fileId: existing.fileId,
+    requestBody: { name: fileName },
+    media: { mimeType, body: Readable.from(data) },
+    fields: "id,webViewLink,name",
+  });
+
+  return {
+    fileId: res.data.id ?? existing.fileId,
+    webViewLink: res.data.webViewLink ?? existing.webViewLink,
     name: res.data.name ?? fileName,
   };
 }

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { buildDailyData } from "@/lib/report-service";
-import { buildDailyReport } from "@/lib/excel/report";
+import { buildDailyData, buildMonthlyData } from "@/lib/report-service";
+import { buildDailyReport, buildMonthlyDailyTabsReport } from "@/lib/excel/report";
 import { getConnectedDrive } from "@/lib/google/store";
-import { ensureDatedFolder, uploadFile } from "@/lib/google/drive";
+import { ensureDatedFolder, upsertFile } from "@/lib/google/drive";
 import type { ShopInfo } from "@/lib/types";
 
 export async function POST(request: Request) {
@@ -24,11 +24,15 @@ export async function POST(request: Request) {
   if (upload) {
     try {
       const { drive, settings } = await getConnectedDrive();
-      const folderId = await ensureDatedFolder(drive, settings.root_folder_id!, "Daily Reports", new Date(`${date}T00:00:00+07:00`));
-      const up = await uploadFile(drive, folderId, fileName,
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf);
+      const month = date.slice(0, 7);
+      const folderId = await ensureDatedFolder(drive, settings.root_folder_id!, "Data Sheets", new Date(`${date}T00:00:00+07:00`));
+      const monthData = await buildMonthlyData(month, shop.shop_name);
+      const monthlyBuf = await buildMonthlyDailyTabsReport(monthData, date);
+      const monthlyFileName = `DNHouse-Data-${month}.xlsx`;
+      const up = await upsertFile(drive, folderId, monthlyFileName,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", monthlyBuf);
       await admin.from("generated_files").insert({
-        file_type: "daily_report", file_name: up.name, drive_file_id: up.fileId, drive_web_url: up.webViewLink, generated_by: profile.id,
+        file_type: "monthly_data_sheet", file_name: up.name, drive_file_id: up.fileId, drive_web_url: up.webViewLink, generated_by: profile.id,
       });
       return NextResponse.json({ ok: true, name: up.name, url: up.webViewLink });
     } catch (e: any) {

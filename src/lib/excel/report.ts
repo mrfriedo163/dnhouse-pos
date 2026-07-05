@@ -130,3 +130,107 @@ export async function buildMonthlyReport(data: MonthlyReportData): Promise<Buffe
 
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
+
+function daySheetName(date: string): string {
+  const [, month, day] = date.split("-");
+  return `${day}-${month}`;
+}
+
+function dateOfOrder(order: Order): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(order.received_at));
+}
+
+/**
+ * One operational workbook per month. Each day is one sheet, so Drive stays tidy:
+ * DNHouse-Data-YYYY-MM.xlsx -> 01-MM, 02-MM, ...
+ */
+export async function buildMonthlyDailyTabsReport(
+  data: MonthlyReportData,
+  selectedDate?: string,
+): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "DN House";
+  wb.created = new Date();
+
+  const summary = wb.addWorksheet("Tong quan");
+  const head = summary.addRow([`${data.shopName} - Data thang ${data.month}`]);
+  head.font = { bold: true, size: 14 };
+  summary.addRow([]);
+  const summaryHeader = summary.addRow(["Ngay", "So bill", "Doanh thu gop", "Giam", "Doanh thu thuc"]);
+  styleHeader(summaryHeader);
+
+  let grossTotal = 0;
+  let discountTotal = 0;
+  let netTotal = 0;
+  for (const day of data.dailyRevenue) {
+    summary.addRow([day.date, day.count, day.gross, day.discount, day.net]);
+    grossTotal += day.gross;
+    discountTotal += day.discount;
+    netTotal += day.net;
+  }
+  const total = summary.addRow(["Tong", data.orders.length, grossTotal, discountTotal, netTotal]);
+  total.font = { bold: true };
+  summary.columns.forEach((column) => (column.width = 18));
+
+  const dates = new Set(data.dailyRevenue.map((row) => row.date));
+  if (selectedDate) dates.add(selectedDate);
+
+  for (const date of [...dates].sort()) {
+    const ws = wb.addWorksheet(daySheetName(date));
+    const dayOrders = data.orders.filter((order) => dateOfOrder(order) === date);
+    const title = ws.addRow([`${data.shopName} - ${date}`]);
+    title.font = { bold: true, size: 13 };
+    ws.addRow([]);
+
+    const tableHeader = ws.addRow([
+      "Ma bill",
+      "Gio tao",
+      "Khach",
+      "SDT",
+      "Tam tinh",
+      "Giam",
+      "Tong thu",
+      "Ghi chu",
+    ]);
+    styleHeader(tableHeader);
+
+    for (const order of dayOrders) {
+      ws.addRow([
+        order.order_no,
+        new Date(order.received_at).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
+        order.customer_name ?? "",
+        order.customer_phone ?? "",
+        order.subtotal,
+        order.discount_total,
+        order.final_total,
+        order.note ?? "",
+      ]);
+    }
+
+    const gross = dayOrders.reduce((sum, order) => sum + Number(order.subtotal), 0);
+    const discount = dayOrders.reduce((sum, order) => sum + Number(order.discount_total), 0);
+    const net = dayOrders.reduce((sum, order) => sum + Number(order.final_total), 0);
+    const dayTotal = ws.addRow(["Tong ngay", dayOrders.length, "", "", gross, discount, net, ""]);
+    dayTotal.font = { bold: true };
+    ws.columns.forEach((column) => (column.width = 18));
+  }
+
+  const svc = wb.addWorksheet("Tong hop dich vu");
+  const svcHead = svc.addRow(["Dich vu", "So luong", "Doanh thu"]);
+  styleHeader(svcHead);
+  for (const service of data.serviceSummary) {
+    svc.addRow([service.service_name, service.quantity, service.revenue]);
+  }
+  svc.columns.forEach((column) => (column.width = 24));
+
+  const notes = wb.addWorksheet("Ghi chu");
+  notes.addRow(["File nay duoc app cap nhat lai khi Admin bam Tao & len Drive o bao cao ngay."]);
+  notes.addRow(["Bill da danh dau xoa khong duoc dua vao file nay."]);
+
+  return Buffer.from(await wb.xlsx.writeBuffer());
+}
