@@ -161,13 +161,10 @@ export async function buildDefaultBillPdf(data: BillData): Promise<Uint8Array> {
   page.drawText("TT:", { x: 23, y: pageHeight - 244, size: 11, font: bold, color: navy });
   page.drawText(ascii(values.final_total), { x: 60, y: pageHeight - 248, size: 18, font: bold, color: navy });
 
-  page.drawText("Trang thai:", { x: 18, y: pageHeight - 281, size: 8, font, color: muted });
-  page.drawText("Chua tra", { x: 74, y: pageHeight - 281, size: 9, font: bold, color: navy });
-
-  page.drawText("Nhan:", { x: 18, y: pageHeight - 306, size: 8, font: bold, color: navy });
-  page.drawText(ascii(values.received_at), { x: 54, y: pageHeight - 306, size: 7.5, font, color: muted });
-  page.drawText("Hen:", { x: 18, y: pageHeight - 326, size: 8, font: bold, color: navy });
-  page.drawText(ascii(values.due_at || "-"), { x: 54, y: pageHeight - 326, size: 7.5, font, color: muted });
+  page.drawText("Nhan:", { x: 18, y: pageHeight - 286, size: 8, font: bold, color: navy });
+  page.drawText(ascii(values.received_at), { x: 54, y: pageHeight - 286, size: 7.5, font, color: muted });
+  page.drawText("Hen:", { x: 18, y: pageHeight - 306, size: 8, font: bold, color: navy });
+  page.drawText(ascii(values.due_at || "-"), { x: 54, y: pageHeight - 306, size: 7.5, font, color: muted });
 
   if (values.note) {
     drawWrappedText(page, `GC: ${values.note}`, 18, 32, { size: 7, font, maxWidth: 175, lineHeight: 8, color: muted });

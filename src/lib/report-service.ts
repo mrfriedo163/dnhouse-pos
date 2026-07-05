@@ -54,12 +54,9 @@ function totalsOf(orders: Order[]) {
   const gross = orders.reduce((s, o) => s + Number(o.subtotal), 0);
   const discount = orders.reduce((s, o) => s + Number(o.discount_total), 0);
   const net = orders.reduce((s, o) => s + Number(o.final_total), 0);
-  const completedCount = orders.filter((o) => o.is_completed).length;
   return {
     gross, discount, net,
-    inCount: orders.length,
-    completedCount,
-    pendingCount: orders.length - completedCount,
+    billCount: orders.length,
   };
 }
 
@@ -67,15 +64,13 @@ export async function buildDailyData(dateStr: string, shopName: string) {
   const { start, end } = dayRange(dateStr);
   const orders = await fetchOrders(start, end);
   const summary = await serviceSummary(orders.map((o) => o.id));
-  const incomplete = orders.filter((o) => !o.is_completed);
-  return { date: dateStr, shopName, orders, serviceSummary: summary, incomplete, totals: totalsOf(orders) };
+  return { date: dateStr, shopName, orders, serviceSummary: summary, totals: totalsOf(orders) };
 }
 
 export async function buildMonthlyData(monthStr: string, shopName: string) {
   const { start, end } = monthRange(monthStr);
   const orders = await fetchOrders(start, end);
   const summary = await serviceSummary(orders.map((o) => o.id));
-  const incomplete = orders.filter((o) => !o.is_completed);
 
   const byDay = new Map<string, { date: string; gross: number; discount: number; net: number; count: number }>();
   for (const o of orders) {
@@ -87,7 +82,7 @@ export async function buildMonthlyData(monthStr: string, shopName: string) {
     byDay.set(d, row);
   }
   return {
-    month: monthStr, shopName, orders, serviceSummary: summary, incomplete,
+    month: monthStr, shopName, orders, serviceSummary: summary,
     dailyRevenue: [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date)),
   };
 }

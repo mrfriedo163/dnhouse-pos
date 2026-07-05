@@ -116,7 +116,7 @@ export function EditOrderForm({ order, items, services }: { order: Order; items:
       <Card className="grid gap-3 sm:grid-cols-2">
         <div><Label>Tên khách</Label><Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></div>
         <div><Label>SĐT</Label><Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} /></div>
-        <div><Label>Hẹn trả</Label><Input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} /></div>
+        <div><Label>Ngày hẹn</Label><Input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} /></div>
       </Card>
 
       <Card className="space-y-2">
@@ -130,7 +130,7 @@ export function EditOrderForm({ order, items, services }: { order: Order; items:
               </Select>
             </div>
             <div className="sm:col-span-2">
-              <Label>SL</Label>
+              <Label>SL / kg</Label>
               <Input inputMode="decimal" value={line.quantityText} placeholder="VD: 4,3" onChange={(e) => setQuantity(line.key, e.target.value)} />
             </div>
             <div className="sm:col-span-3">
@@ -163,7 +163,7 @@ export function EditOrderForm({ order, items, services }: { order: Order; items:
       </Card>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <div className="flex gap-2"><Button type="submit" disabled={saving}>{saving ? "Đang lưu..." : "Lưu thay đổi"}</Button></div>
+      <Button type="submit" disabled={saving}>{saving ? "Đang lưu..." : "Lưu thay đổi"}</Button>
     </form>
   );
 }

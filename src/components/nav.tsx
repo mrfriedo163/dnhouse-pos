@@ -13,8 +13,7 @@ type NavLink = {
 
 const links: NavLink[] = [
   { href: "/dashboard", label: "Tổng quan", roles: ["admin", "staff"] },
-  { href: "/orders/new", label: "Tạo đơn", roles: ["admin", "staff"] },
-  { href: "/orders/out", label: "Trả đồ", roles: ["admin", "staff"] },
+  { href: "/orders/new", label: "Tạo bill", roles: ["admin", "staff"] },
   { href: "/orders", label: "Đơn hàng", roles: ["admin", "staff"] },
   { href: "/services", label: "Dịch vụ", roles: ["admin"] },
   { href: "/templates", label: "Mẫu PDF", roles: ["admin"] },

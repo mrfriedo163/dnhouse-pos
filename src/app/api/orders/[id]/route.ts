@@ -3,7 +3,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { updateOrder } from "@/lib/order-service";
 import type { OrderInput } from "@/lib/types";
 
-// PATCH: admin-only order edit (recomputes revenue + audit log).
+// PATCH: admin-only bill edit (recomputes revenue + audit log).
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   const profile = await getCurrentProfile();
   if (!profile || profile.role !== "admin") return NextResponse.json({ error: "Admin only" }, { status: 403 });

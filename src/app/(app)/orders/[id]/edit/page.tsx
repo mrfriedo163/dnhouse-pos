@@ -16,8 +16,8 @@ export default async function EditOrderPage({ params }: { params: { id: string }
   const { data: services } = await supabase.from("services").select("*").eq("active", true).order("name");
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold">Sửa đơn {(order as Order).order_no}</h1>
-      <p className="text-sm text-amber-700">Sửa đơn sẽ tính lại doanh thu và được ghi vào audit log.</p>
+      <h1 className="text-xl font-bold">Sửa bill {(order as Order).order_no}</h1>
+      <p className="text-sm text-amber-700">Chỉ quản lý nên sửa bill khi nhập sai. Hệ thống sẽ tính lại doanh thu.</p>
       <EditOrderForm order={order as Order} items={items ?? []} services={(services ?? []) as Service[]} />
     </div>
   );

@@ -17,8 +17,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { order } = await createOrder(body, profile.id);
-    // Best-effort bill generation + drive upload. Order is already saved.
+    const { order } = await createOrder(body, profile.id, true);
     const bill = await generateAndUploadBill(order.id);
     return NextResponse.json({ order, driveWarning: bill.ok ? null : bill.warning });
   } catch (e: any) {

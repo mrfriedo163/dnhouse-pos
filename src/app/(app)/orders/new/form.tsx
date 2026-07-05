@@ -113,12 +113,12 @@ export function NewOrderForm({ services }: { services: Service[] }) {
         <div className="grid gap-3 sm:grid-cols-2">
           <div><Label>Tên khách</Label><Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></div>
           <div><Label>Số điện thoại</Label><Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} inputMode="tel" /></div>
-          <div><Label>Hẹn trả</Label><Input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} /></div>
+          <div><Label>Ngày hẹn</Label><Input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} /></div>
         </div>
       </Card>
 
       <Card className="space-y-3">
-        <Label>Dịch vụ</Label>
+        <Label>Dịch vụ và cân thực tế</Label>
         {lines.map((line) => (
           <div key={line.key} className="grid grid-cols-1 gap-2 rounded-lg border border-slate-200 p-2 sm:grid-cols-12 sm:items-end">
             <div className="sm:col-span-4">
@@ -129,13 +129,8 @@ export function NewOrderForm({ services }: { services: Service[] }) {
               </Select>
             </div>
             <div className="sm:col-span-2">
-              <Label>SL</Label>
-              <Input
-                inputMode="decimal"
-                value={line.quantityText}
-                placeholder="VD: 4,3"
-                onChange={(e) => setQuantity(line.key, e.target.value)}
-              />
+              <Label>SL / kg</Label>
+              <Input inputMode="decimal" value={line.quantityText} placeholder="VD: 4,3" onChange={(e) => setQuantity(line.key, e.target.value)} />
             </div>
             <div className="sm:col-span-3">
               <Label>Đơn giá</Label>
@@ -161,10 +156,7 @@ export function NewOrderForm({ services }: { services: Service[] }) {
             </Select>
           </div>
           {discountType !== "none" && (
-            <div>
-              <Label>Giá trị giảm</Label>
-              <Input type="number" min={0} value={discountValue} onChange={(e) => setDiscountValue(Number(e.target.value))} />
-            </div>
+            <div><Label>Giá trị giảm</Label><Input type="number" min={0} value={discountValue} onChange={(e) => setDiscountValue(Number(e.target.value))} /></div>
           )}
         </div>
         <div><Label>Ghi chú</Label><Input value={note} onChange={(e) => setNote(e.target.value)} /></div>
@@ -177,10 +169,10 @@ export function NewOrderForm({ services }: { services: Service[] }) {
       </Card>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <div className="flex gap-2">
-        <Button type="submit" disabled={saving}>{saving ? "Đang lưu..." : "Lưu đơn & tạo bill"}</Button>
-      </div>
-      <p className="text-xs text-slate-400">Doanh thu được tính ngay khi tạo đơn theo ngày nhận.</p>
+      <Button type="submit" disabled={saving}>{saving ? "Đang lưu..." : "Tạo đơn & in bill"}</Button>
+      <p className="text-xs text-slate-400">
+        Lưu xong có thể in bill ngay và doanh thu được ghi nhận trong ngày.
+      </p>
     </form>
   );
 }

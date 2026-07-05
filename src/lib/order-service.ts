@@ -13,7 +13,7 @@ async function getOrderPrefix(admin: ReturnType<typeof createAdminClient>): Prom
  * Create an order + items server-side with authoritative revenue math and a
  * collision-safe daily order number. Returns the created order row + items.
  */
-export async function createOrder(input: OrderInput, createdByProfileId: string) {
+export async function createOrder(input: OrderInput, createdByProfileId: string, completeImmediately = false) {
   const admin = createAdminClient();
   const now = new Date();
   const prefix = await getOrderPrefix(admin);
@@ -50,6 +50,9 @@ export async function createOrder(input: OrderInput, createdByProfileId: string)
         final_total: totals.final_total,
         note: input.note ?? null,
         created_by: createdByProfileId,
+        is_completed: completeImmediately,
+        completed_at: completeImmediately ? now.toISOString() : null,
+        completed_by: completeImmediately ? createdByProfileId : null,
       })
       .select("*")
       .single();

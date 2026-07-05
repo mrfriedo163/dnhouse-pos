@@ -21,7 +21,6 @@ export default async function Dashboard() {
   const supabase = createClient();
   const admin = createAdminClient();
   const { start, end } = dayRange(todayLocal());
-  const nowIso = new Date().toISOString();
 
   const { data: todayOrders } = await supabase
     .from("orders")
@@ -32,19 +31,6 @@ export default async function Dashboard() {
   const orders = todayOrders ?? [];
   const revenue = orders.reduce((sum, order) => sum + Number(order.final_total), 0);
   const discount = orders.reduce((sum, order) => sum + Number(order.discount_total), 0);
-  const completed = orders.filter((order) => order.is_completed).length;
-
-  const { count: pendingCount } = await supabase
-    .from("orders")
-    .select("id", { count: "exact", head: true })
-    .is("deleted_at", null)
-    .eq("is_completed", false);
-  const { count: overdueCount } = await supabase
-    .from("orders")
-    .select("id", { count: "exact", head: true })
-    .is("deleted_at", null)
-    .eq("is_completed", false)
-    .lt("due_at", nowIso);
 
   const { data: drive } = await admin.from("drive_settings").select("connected, root_folder_url").limit(1).maybeSingle();
 
@@ -61,23 +47,22 @@ export default async function Dashboard() {
           <div>
             <p className="text-xs font-black uppercase tracking-widest text-promo">DN House POS</p>
             <h1 className="mt-2 text-2xl font-black text-navy md:text-3xl">Tổng quan hôm nay</h1>
-            <p className="mt-2 text-sm font-semibold text-slate-500">Ngày {todayLocal()} · Theo dõi đơn nhận, đơn trả và doanh thu tại tiệm.</p>
+            <p className="mt-2 text-sm font-semibold text-slate-500">
+              Ngày {todayLocal()} · Nhập bill sau khi giặt xong, cân xong và nhận tiền.
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link href="/orders/new"><Button>+ Tạo đơn</Button></Link>
-            <Link href="/orders/out"><Button variant="secondary">Trả đồ</Button></Link>
-            <Link href="/orders"><Button variant="secondary">Tìm đơn</Button></Link>
+            <Link href="/orders/new"><Button>+ Tạo bill</Button></Link>
+            <Link href="/orders"><Button variant="secondary">Lịch sử bill</Button></Link>
           </div>
         </div>
       </section>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Đơn nhận hôm nay" value={orders.length} />
-        <Stat label="Doanh thu hôm nay" value={formatVnd(revenue)} hint="Tính theo ngày nhận đơn" />
+        <Stat label="Bill hôm nay" value={orders.length} />
+        <Stat label="Doanh thu hôm nay" value={formatVnd(revenue)} hint="Tính theo ngày tạo bill" />
         <Stat label="Giảm giá hôm nay" value={formatVnd(discount)} />
-        <Stat label="Đơn đã hoàn thành" value={completed} />
-        <Stat label="Đơn đang xử lý" value={pendingCount ?? 0} />
-        <Stat label="Đơn quá hạn trả" value={overdueCount ?? 0} />
+        <Stat label="Trung bình / bill" value={orders.length ? formatVnd(revenue / orders.length) : formatVnd(0)} />
       </div>
 
       {profile.role === "admin" && (
