@@ -108,10 +108,10 @@ function drawWrappedText(
 /** Fallback bill when no uploaded PDF template is active. */
 export async function buildDefaultBillPdf(data: BillData): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  // 76x130mm FlashLabel thermal label.
+  // 76x100mm FlashLabel thermal label.
   const mm = 72 / 25.4;
   const pageWidth = 76 * mm;
-  const pageHeight = 130 * mm;
+  const pageHeight = 100 * mm;
   const page = doc.addPage([pageWidth, pageHeight]);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -120,57 +120,57 @@ export async function buildDefaultBillPdf(data: BillData): Promise<Uint8Array> {
   const line = rgb(0.06, 0.13, 0.32);
   const values = buildBillValues(data);
 
-  // Keep a modest safe area for FlashLabel while using most of the 76x130mm stock.
+  // Keep a modest safe area for FlashLabel while using most of the 76x100mm stock.
   page.drawRectangle({ x: 8, y: 8, width: pageWidth - 16, height: pageHeight - 16, borderColor: navy, borderWidth: 1.2, color: rgb(1, 1, 1) });
 
   try {
     const logoPath = path.join(process.cwd(), "public", "dn-house-logo.jpg");
     const logoBytes = await readFile(logoPath);
     const logo = await doc.embedJpg(logoBytes);
-    page.drawImage(logo, { x: 16, y: pageHeight - 40, width: 26, height: 26 });
+    page.drawImage(logo, { x: 16, y: pageHeight - 34, width: 22, height: 22 });
   } catch {
-    page.drawRectangle({ x: 16, y: pageHeight - 40, width: 26, height: 26, borderColor: navy, borderWidth: 0.8 });
+    page.drawRectangle({ x: 16, y: pageHeight - 34, width: 22, height: 22, borderColor: navy, borderWidth: 0.8 });
   }
 
-  page.drawText("GIAT SAY", { x: 48, y: pageHeight - 25, size: 9, font: bold, color: navy });
-  page.drawText("DN House", { x: 48, y: pageHeight - 47, size: 22, font: bold, color: navy });
-  page.drawText("PHIEU HEN / BILL", { x: 130, y: pageHeight - 24, size: 7.5, font: bold, color: navy });
-  page.drawText(ascii(values.order_no), { x: 119, y: pageHeight - 37, size: 7.8, font: bold, color: navy });
-  page.drawLine({ start: { x: 14, y: pageHeight - 55 }, end: { x: pageWidth - 14, y: pageHeight - 55 }, thickness: 0.8, color: line });
+  page.drawText("GIAT SAY", { x: 44, y: pageHeight - 21, size: 8, font: bold, color: navy });
+  page.drawText("DN House", { x: 44, y: pageHeight - 39, size: 18, font: bold, color: navy });
+  page.drawText("PHIEU / BILL", { x: 142, y: pageHeight - 21, size: 7, font: bold, color: navy });
+  page.drawText(ascii(values.order_no), { x: 151, y: pageHeight - 34, size: 5.5, font: bold, color: navy });
+  page.drawLine({ start: { x: 14, y: pageHeight - 47 }, end: { x: pageWidth - 14, y: pageHeight - 47 }, thickness: 0.8, color: line });
 
-  page.drawText("Khach:", { x: 16, y: pageHeight - 77, size: 9, font: bold, color: navy });
-  drawWrappedText(page, values.customer_name || "-", 58, pageHeight - 77, { size: 9, font: bold, maxWidth: 135, lineHeight: 10, color: navy });
-  page.drawText("SDT:", { x: 16, y: pageHeight - 99, size: 9, font: bold, color: navy });
-  page.drawText(ascii(values.customer_phone || "-"), { x: 58, y: pageHeight - 99, size: 9, font: bold, color: navy });
+  page.drawText("Khach:", { x: 16, y: pageHeight - 66, size: 8.5, font: bold, color: navy });
+  drawWrappedText(page, values.customer_name || "-", 58, pageHeight - 66, { size: 8.5, font: bold, maxWidth: 135, lineHeight: 9, color: navy });
+  page.drawText("SDT:", { x: 16, y: pageHeight - 84, size: 8.5, font: bold, color: navy });
+  page.drawText(ascii(values.customer_phone || "-"), { x: 58, y: pageHeight - 84, size: 8.5, font: bold, color: navy });
 
   const services = data.items.map((it) => {
     const qty = Number(it.quantity);
     const qtyText = Number.isInteger(qty) ? String(qty) : String(qty).replace(".", ",");
     return `${shortServiceName(ascii(it.service_name_snapshot))} ${qtyText}${ascii(it.unit_type ?? "")}`;
   });
-  page.drawText("DV:", { x: 16, y: pageHeight - 123, size: 9, font: bold, color: navy });
-  drawWrappedText(page, services.join(" / ") || "-", 40, pageHeight - 123, { size: 10, font: bold, maxWidth: 155, lineHeight: 11, color: navy });
+  page.drawText("DV:", { x: 16, y: pageHeight - 104, size: 8.5, font: bold, color: navy });
+  drawWrappedText(page, services.join(" / ") || "-", 40, pageHeight - 104, { size: 9, font: bold, maxWidth: 155, lineHeight: 10, color: navy });
 
-  page.drawLine({ start: { x: 14, y: pageHeight - 158 }, end: { x: pageWidth - 14, y: pageHeight - 158 }, thickness: 0.7, color: line });
-  page.drawText("Gia:", { x: 18, y: pageHeight - 181, size: 9, font: bold, color: navy });
-  page.drawText(ascii(values.subtotal), { x: 62, y: pageHeight - 181, size: 10, font: bold, color: navy });
-  page.drawText("Giam:", { x: 18, y: pageHeight - 205, size: 9, font, color: muted });
-  page.drawText(ascii(values.discount_total), { x: 62, y: pageHeight - 205, size: 9, font, color: muted });
+  page.drawLine({ start: { x: 14, y: pageHeight - 132 }, end: { x: pageWidth - 14, y: pageHeight - 132 }, thickness: 0.7, color: line });
+  page.drawText("Gia:", { x: 18, y: pageHeight - 150, size: 8.5, font: bold, color: navy });
+  page.drawText(ascii(values.subtotal), { x: 58, y: pageHeight - 150, size: 9, font: bold, color: navy });
+  page.drawText("Giam:", { x: 118, y: pageHeight - 150, size: 8, font, color: muted });
+  page.drawText(ascii(values.discount_total), { x: 154, y: pageHeight - 150, size: 8, font, color: muted });
 
-  page.drawRectangle({ x: 16, y: pageHeight - 258, width: pageWidth - 32, height: 36, borderColor: navy, borderWidth: 0.8 });
-  page.drawText("TT:", { x: 23, y: pageHeight - 244, size: 11, font: bold, color: navy });
-  page.drawText(ascii(values.final_total), { x: 60, y: pageHeight - 248, size: 18, font: bold, color: navy });
+  page.drawRectangle({ x: 16, y: pageHeight - 190, width: pageWidth - 32, height: 30, borderColor: navy, borderWidth: 0.8 });
+  page.drawText("TT:", { x: 24, y: pageHeight - 179, size: 10, font: bold, color: navy });
+  page.drawText(ascii(values.final_total), { x: 58, y: pageHeight - 183, size: 16, font: bold, color: navy });
 
-  page.drawText("Nhan:", { x: 18, y: pageHeight - 286, size: 8, font: bold, color: navy });
-  page.drawText(ascii(values.received_at), { x: 54, y: pageHeight - 286, size: 7.5, font, color: muted });
-  page.drawText("Hen:", { x: 18, y: pageHeight - 306, size: 8, font: bold, color: navy });
-  page.drawText(ascii(values.due_at || "-"), { x: 54, y: pageHeight - 306, size: 7.5, font, color: muted });
+  page.drawText("Nhan:", { x: 18, y: pageHeight - 207, size: 7.5, font: bold, color: navy });
+  page.drawText(ascii(values.received_at), { x: 52, y: pageHeight - 207, size: 6.8, font, color: muted });
+  page.drawText("Hen:", { x: 18, y: pageHeight - 222, size: 7.5, font: bold, color: navy });
+  page.drawText(ascii(values.due_at || "-"), { x: 52, y: pageHeight - 222, size: 6.8, font, color: muted });
 
   if (values.note) {
-    drawWrappedText(page, `GC: ${values.note}`, 18, 32, { size: 7, font, maxWidth: 175, lineHeight: 8, color: muted });
+    drawWrappedText(page, `GC: ${values.note}`, 18, 42, { size: 6.5, font, maxWidth: 175, lineHeight: 7, color: muted });
   }
   page.drawLine({ start: { x: 14, y: 25 }, end: { x: pageWidth - 14, y: 25 }, thickness: 0.7, color: line });
-  page.drawText("Zalo: 0945.632.853", { x: 65, y: 14, size: 8, font: bold, color: navy });
+  page.drawText("Zalo: 0945.632.853", { x: 65, y: 14, size: 7.5, font: bold, color: navy });
 
   return doc.save();
 }
