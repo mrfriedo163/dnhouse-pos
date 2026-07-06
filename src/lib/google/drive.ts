@@ -49,13 +49,11 @@ export async function ensureRootStructure(
 ): Promise<{ rootId: string; rootUrl: string }> {
   const rootId = await ensureFolder(drive, "DN House");
   await Promise.all([
-    ensureFolder(drive, "Bills", rootId),
-    ensureFolder(drive, "Daily Reports", rootId),
+    ensureFolder(drive, "Data Sheets", rootId),
     ensureFolder(drive, "Monthly Reports", rootId),
     ensureFolder(drive, "Declaration Drafts", rootId),
     ensureFolder(drive, "Templates", rootId),
     ensureFolder(drive, "Backups", rootId),
-    ensureFolder(drive, "Data Sheets", rootId),
   ]);
   const meta = await drive.files.get({ fileId: rootId, fields: "webViewLink" });
   return { rootId, rootUrl: meta.data.webViewLink ?? `https://drive.google.com/drive/folders/${rootId}` };
@@ -74,7 +72,7 @@ export function monthBucket(d: Date, timeZone = "Asia/Ho_Chi_Minh"): string {
 export async function ensureDatedFolder(
   drive: drive_v3.Drive,
   rootId: string,
-  section: "Bills" | "Daily Reports" | "Monthly Reports" | "Declaration Drafts" | "Data Sheets",
+  section: "Data Sheets" | "Monthly Reports" | "Declaration Drafts",
   date: Date,
 ): Promise<string> {
   const sectionId = await ensureFolder(drive, section, rootId);

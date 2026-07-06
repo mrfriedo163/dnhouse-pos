@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { createOrder } from "@/lib/order-service";
-import { generateAndUploadBill } from "@/lib/bill";
 import type { OrderInput } from "@/lib/types";
 
 export async function POST(request: Request) {
@@ -18,8 +17,7 @@ export async function POST(request: Request) {
 
   try {
     const { order } = await createOrder(body, profile.id, true);
-    const bill = await generateAndUploadBill(order.id);
-    return NextResponse.json({ order, driveWarning: bill.ok ? null : bill.warning });
+    return NextResponse.json({ order });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "Failed to create order" }, { status: 500 });
   }

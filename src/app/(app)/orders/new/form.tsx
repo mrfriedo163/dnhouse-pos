@@ -99,7 +99,7 @@ export function NewOrderForm({ services }: { services: Service[] }) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error ?? "Lưu đơn thất bại");
-      router.push(`/orders/${json.order.id}?created=1${json.driveWarning ? "&drive=fail" : ""}`);
+      router.push(`/orders/${json.order.id}?created=1`);
       router.refresh();
     } catch (err: any) {
       setError(err?.message ?? "Lỗi");

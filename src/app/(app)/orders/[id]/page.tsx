@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { formatVnd } from "@/lib/calc";
 import { PrintButtons } from "./print-buttons";
 import { AdminOrderActions } from "./admin-actions";
@@ -16,7 +15,7 @@ export default async function OrderDetail({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { created?: string; drive?: string };
+  searchParams: { created?: string };
 }) {
   const supabase = createClient();
   const profile = await getCurrentProfile();
@@ -29,16 +28,11 @@ export default async function OrderDetail({
   return (
     <div className="space-y-4">
       {searchParams.created && !isDeleted && (
-        <div className="rounded-lg bg-emerald-50 p-3 text-emerald-800">Đã tạo bill {currentOrder.order_no}. Có thể in ngay.</div>
-      )}
-      {searchParams.drive === "fail" && !isDeleted && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-800">
-          Tải bill lên Google Drive thất bại. Bill vẫn được lưu trong hệ thống.
-          <form action={`/api/orders/${currentOrder.id}/bill-retry`} method="post" className="mt-2">
-            <Button type="submit" variant="secondary">Thử tải lại lên Drive</Button>
-          </form>
+        <div className="rounded-lg bg-emerald-50 p-3 text-emerald-800">
+          Đã tạo bill {currentOrder.order_no}. Có thể mở PDF để in ngay.
         </div>
       )}
+
       {isDeleted && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">
           Bill này đã được đánh dấu xóa lúc {new Date(currentOrder.deleted_at!).toLocaleString("vi-VN")}.
@@ -89,7 +83,7 @@ export default async function OrderDetail({
         </div>
       </Card>
 
-      {!isDeleted && <PrintButtons billUrl={currentOrder.bill_drive_web_url} orderId={currentOrder.id} orderNo={currentOrder.order_no} />}
+      {!isDeleted && <PrintButtons orderId={currentOrder.id} orderNo={currentOrder.order_no} />}
       {profile?.role === "admin" && !isDeleted && <AdminOrderActions orderId={currentOrder.id} />}
     </div>
   );

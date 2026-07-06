@@ -1,6 +1,5 @@
 import { createAdminClient } from "./supabase/admin";
 import { getConnectedDrive } from "./google/store";
-import { ensureDatedFolder, uploadFile } from "./google/drive";
 import { buildDefaultBillPdf, fillBillPdf } from "./pdf/fill";
 import type { BillData } from "./pdf/fill";
 import type { ShopInfo } from "./types";
@@ -58,41 +57,4 @@ export async function generateBillPdf(orderId: string): Promise<Uint8Array> {
   const data = await loadBillData(orderId);
   if (!template) return buildDefaultBillPdf(data);
   return fillBillPdf(template.bytes, template.mapping, data, true);
-}
-
-/**
- * Generate and upload the bill to DN House/Bills/YYYY-MM/ and persist links on the order.
- * Returns { ok, warning? }. Never throws for Drive failures, so the order stays saved.
- */
-export async function generateAndUploadBill(orderId: string): Promise<{ ok: boolean; warning?: string }> {
-  const admin = createAdminClient();
-  let pdf: Uint8Array;
-  try {
-    pdf = await generateBillPdf(orderId);
-  } catch (e: any) {
-    return { ok: false, warning: e?.message ?? "Khong tao duoc PDF bill" };
-  }
-
-  try {
-    const { drive, settings } = await getConnectedDrive();
-    const { data: order } = await admin.from("orders").select("order_no, received_at").eq("id", orderId).single();
-    if (!order) return { ok: false, warning: "Khong tim thay don de tao bill." };
-
-    const folderId = await ensureDatedFolder(drive, settings.root_folder_id!, "Bills", new Date(order.received_at));
-    const upload = await uploadFile(drive, folderId, `${order.order_no}.pdf`, "application/pdf", Buffer.from(pdf));
-    await admin.from("orders").update({ bill_drive_file_id: upload.fileId, bill_drive_web_url: upload.webViewLink }).eq("id", orderId);
-    await admin.from("generated_files").insert({
-      file_type: "bill_pdf",
-      related_order_id: orderId,
-      file_name: upload.name,
-      drive_file_id: upload.fileId,
-      drive_web_url: upload.webViewLink,
-    });
-    return { ok: true };
-  } catch (e: any) {
-    return {
-      ok: false,
-      warning: e?.code === "NOT_CONNECTED" ? "Google Drive chua ket noi." : (e?.message ?? "Drive upload failed"),
-    };
-  }
 }
