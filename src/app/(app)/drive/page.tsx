@@ -3,6 +3,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, CardTitle } from "@/components/ui/card";
 import { DriveActions } from "./actions";
+import { formatShopDateTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export default async function DrivePage() {
         <p className={`mt-1 font-medium ${status === "connected" ? "text-emerald-600" : "text-red-600"}`}>
           {status === "connected" ? "Đã kết nối" : "Chưa kết nối"}
         </p>
-        {data?.last_test_at && <p className="text-xs text-slate-400">Test gần nhất: {new Date(data.last_test_at).toLocaleString("vi-VN")}</p>}
+        {data?.last_test_at && <p className="text-xs text-slate-400">Test gần nhất: {formatShopDateTime(data.last_test_at)}</p>}
       </Card>
       <DriveActions connected={status === "connected"} configured={driveConfigured} rootUrl={data?.root_folder_url ?? null} />
       <p className="text-xs text-slate-400">

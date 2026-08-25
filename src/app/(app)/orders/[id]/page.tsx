@@ -6,6 +6,7 @@ import { formatVnd } from "@/lib/calc";
 import { PrintButtons } from "./print-buttons";
 import { AdminOrderActions } from "./admin-actions";
 import { getCurrentProfile } from "@/lib/auth";
+import { formatShopDateTime } from "@/lib/datetime";
 import type { Order } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ export default async function OrderDetail({
 
       {isDeleted && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">
-          Bill này đã được đánh dấu xóa lúc {new Date(currentOrder.deleted_at!).toLocaleString("vi-VN")}.
+          Bill này đã được đánh dấu xóa lúc {formatShopDateTime(currentOrder.deleted_at!)}.
           Dữ liệu vẫn được giữ để đối soát, nhưng không tính vào doanh thu/báo cáo.
         </div>
       )}
@@ -49,8 +50,8 @@ export default async function OrderDetail({
         <div className="grid gap-2 text-sm sm:grid-cols-2">
           <div>Khách: <b>{currentOrder.customer_name ?? "-"}</b></div>
           <div>SĐT: <b>{currentOrder.customer_phone ?? "-"}</b></div>
-          <div>Ngày tạo: {new Date(currentOrder.received_at).toLocaleString("vi-VN")}</div>
-          <div>Ngày hẹn: {currentOrder.due_at ? new Date(currentOrder.due_at).toLocaleString("vi-VN") : "-"}</div>
+          <div>Ngày tạo: {formatShopDateTime(currentOrder.received_at)}</div>
+          <div>Ngày hẹn: {currentOrder.due_at ? formatShopDateTime(currentOrder.due_at) : "-"}</div>
         </div>
       </Card>
 

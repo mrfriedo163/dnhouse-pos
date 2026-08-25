@@ -5,6 +5,7 @@ import { formatVnd } from "@/lib/calc";
 import { getCurrentProfile } from "@/lib/auth";
 import type { Order } from "@/lib/types";
 import { DeleteOrderButton } from "./delete-order-button";
+import { formatShopDate } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +86,7 @@ export default async function OrdersList({
             {orders.map((order) => (
               <tr key={order.id} className="border-t">
                 <td className="p-2 font-medium">{order.order_no}</td>
-                <td>{new Date(order.received_at).toLocaleDateString("vi-VN")}</td>
+                <td>{formatShopDate(order.received_at)}</td>
                 <td>{order.customer_name ?? "-"}</td>
                 <td>{order.customer_phone ?? "-"}</td>
                 <td className="text-right">{formatVnd(order.final_total)}</td>
@@ -113,7 +114,7 @@ export default async function OrdersList({
                   <span>{formatVnd(order.final_total)}</span>
                 </div>
                 <div className="text-sm text-slate-500">
-                  {order.customer_name ?? "khách lẻ"} · {new Date(order.received_at).toLocaleDateString("vi-VN")}
+                  {order.customer_name ?? "khách lẻ"} · {formatShopDate(order.received_at)}
                 </div>
               </Link>
               {isAdmin && !showingDeleted && <DeleteOrderButton orderId={order.id} orderNo={order.order_no} />}

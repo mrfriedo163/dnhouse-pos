@@ -20,4 +20,19 @@ describe("PDF field mapping values", () => {
     expect(values.service_table).toContain("Giặt sấy thường");
     expect(values.created_by).toBe("Staff A");
   });
+
+  it("prints Supabase UTC timestamps in Vietnam time", () => {
+    const values = buildBillValues({
+      order: {
+        order_no: "DN-20260825-0001", received_at: "2026-08-25T12:00:00.000Z", due_at: null,
+        customer_name: "Khach", customer_phone: "", subtotal: 9000,
+        discount_type: "amount", discount_value: 0, discount_total: 0, final_total: 9000, note: null,
+      },
+      items: [{ service_name_snapshot: "Giat say", quantity: 1, unit_type: "kg", unit_price: 9000 }],
+      shop: { shop_name: "DN House", business_type: "", address: "", phone: "" },
+      createdBy: "Dung",
+    });
+
+    expect(values.received_at).toContain("19:00");
+  });
 });
