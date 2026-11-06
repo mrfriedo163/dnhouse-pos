@@ -64,14 +64,6 @@ export async function POST() {
 
         if (error) throw error;
         userId = data.user?.id ?? null;
-      } else {
-        const { error } = await admin.auth.admin.updateUserById(userId, {
-          password: DEFAULT_PASSWORD,
-          email_confirm: true,
-          user_metadata: { full_name: account.fullName },
-        });
-
-        if (error) throw error;
       }
 
       if (!userId) {

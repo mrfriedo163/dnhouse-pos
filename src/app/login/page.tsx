@@ -35,17 +35,6 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function ensureInternalUsers() {
-    const response = await withTimeout(
-      fetch("/api/internal-users/ensure", { method: "POST" }),
-      "Không thể chuẩn bị tài khoản nội bộ. Vui lòng thử lại.",
-    );
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || !result.ok) {
-      throw new Error(result.error ?? "Không thể chuẩn bị tài khoản nội bộ.");
-    }
-  }
-
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -56,8 +45,6 @@ export default function LoginPage() {
       if (!email) {
         throw new Error("Tài khoản hoặc mật khẩu không đúng.");
       }
-
-      await ensureInternalUsers();
 
       const supabase = createClient();
       const { error } = await withTimeout(
