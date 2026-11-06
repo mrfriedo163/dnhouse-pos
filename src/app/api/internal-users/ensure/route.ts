@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getCurrentProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const DEFAULT_PASSWORD = "123456789";
@@ -36,6 +37,11 @@ async function findUserIdByEmail(admin: ReturnType<typeof createAdminClient>, em
 
 export async function POST() {
   try {
+    const profile = await getCurrentProfile();
+    if (!profile || !profile.active || profile.role !== "admin") {
+      return NextResponse.json({ ok: false, error: "FORBIDDEN: admin only" }, { status: 403 });
+    }
+
     const missing = missingSupabaseEnv();
 
     if (missing.length > 0) {
@@ -53,6 +59,7 @@ export async function POST() {
 
     for (const account of INTERNAL_USERS) {
       let userId = await findUserIdByEmail(admin, account.email);
+      const isNewUser = !userId;
 
       if (!userId) {
         const { data, error } = await admin.auth.admin.createUser({
@@ -70,12 +77,16 @@ export async function POST() {
         throw new Error(`Không tạo được tài khoản ${account.email}`);
       }
 
-      const { error: profileError } = await admin.from("profiles").upsert({
-        id: userId,
-        full_name: account.fullName,
-        role: account.role,
-        active: true,
-      });
+      // Preserve roles and account locks that the manager has already configured.
+      const { error: profileError } = await admin.from("profiles").upsert(
+        {
+          id: userId,
+          full_name: account.fullName,
+          role: account.role,
+          active: true,
+        },
+        { onConflict: "id", ignoreDuplicates: !isNewUser },
+      );
 
       if (profileError) throw profileError;
 
